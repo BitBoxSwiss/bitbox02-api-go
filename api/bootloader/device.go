@@ -118,6 +118,9 @@ func (device *Device) query(cmd rune, data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(reply) == 0 {
+		return nil, errp.Newf("Unexpected reply: %v", reply)
+	}
 	if reply[0] != byte(cmd) || len(reply) < 2 || reply[1] != 0 {
 		return nil, errp.Newf("Unexpected reply: %v", reply)
 	}
@@ -130,9 +133,12 @@ func (device *Device) Versions() (uint32, uint32, error) {
 	if err != nil {
 		return 0, 0, err
 	}
+	if len(response) != 8 {
+		return 0, 0, errp.Newf("Unexpected reply: %v", response)
+	}
 	firmwareVersion := binary.LittleEndian.Uint32(response[:4])
 	signingPubkeysVersion := binary.LittleEndian.Uint32(response[4:8])
-	return firmwareVersion, signingPubkeysVersion, err
+	return firmwareVersion, signingPubkeysVersion, nil
 }
 
 // GetHashes queries the device for the firmware and signing keydata hashes.
@@ -143,6 +149,9 @@ func (device *Device) GetHashes(displayFirmwareHash, displaySigningKeydataHash b
 		[]byte{toByte(displayFirmwareHash), toByte(displaySigningKeydataHash)})
 	if err != nil {
 		return nil, nil, err
+	}
+	if len(response) != 64 {
+		return nil, nil, errp.New("unexpected response")
 	}
 	firmwareHash := response[:32]
 	signingKeyDatahash := response[32:64]
@@ -236,7 +245,7 @@ func (device *Device) flashSignedFirmware(firmware []byte, progressCallback func
 
 	expectedMagic, ok := sigDataMagic[device.edition]
 	if !ok {
-		return errp.New("unrecognozed edition")
+		return errp.New("unrecognized edition")
 	}
 	if binary.BigEndian.Uint32(magic) != expectedMagic {
 		return errp.New("invalid signing pubkeys data magic")
