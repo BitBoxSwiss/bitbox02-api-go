@@ -133,7 +133,7 @@ func (device *Device) Versions() (uint32, uint32, error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	if len(response) != 8 {
+	if len(response) < 8 {
 		return 0, 0, errp.Newf("Unexpected reply: %v", response)
 	}
 	firmwareVersion := binary.LittleEndian.Uint32(response[:4])
