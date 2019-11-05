@@ -124,6 +124,7 @@ func TestVersions(t *testing.T) {
 			"x\x00aaaaaaaa", // wrong cmd, good len
 			"v\x01aaaaaaaa", // wrong op status
 		} {
+			testResponse := testResponse
 			env.communication.query = func([]byte) ([]byte, error) {
 				return []byte(testResponse), nil
 			}
@@ -145,6 +146,7 @@ func TestGetHashes(t *testing.T) {
 			{true, false, "h\x01\x00"},
 			{true, true, "h\x01\x01"},
 		} {
+			test := test
 			t.Run("happy", func(t *testing.T) {
 				h1 := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 				h2 := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
@@ -259,7 +261,7 @@ func TestUpgradeFirmware(t *testing.T) {
 			opCode, index, chunk := msg[0], msg[1], msg[2:]
 			require.Equal(t, byte('w'), opCode)
 			require.Equal(t, byte(chunkIndex), index)
-			reassembledFirmware = append(reassembledFirmware, []byte(chunk)...)
+			reassembledFirmware = append(reassembledFirmware, chunk...)
 		}
 		require.Len(t, reassembledFirmware, numChunks*chunkSize)
 		reassembledFirmware, _ = reassembledFirmware[:len(unsignedFirmware)], reassembledFirmware[len(unsignedFirmware):]
