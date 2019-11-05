@@ -78,6 +78,7 @@ type Device struct {
 	edition         common.Edition
 	status          *Status
 	onStatusChanged func(*Status)
+	sleep           func(time.Duration)
 }
 
 // NewDevice creates a new instance of Device.
@@ -92,6 +93,7 @@ func NewDevice(
 		edition:         edition,
 		status:          &Status{},
 		onStatusChanged: onStatusChanged,
+		sleep:           time.Sleep,
 	}
 }
 
@@ -193,7 +195,7 @@ func (device *Device) erase(firmwareNumChunks uint8) error {
 
 func (device *Device) writeChunk(chunkNum uint8, chunk []byte) error {
 	if len(chunk) > chunkSize {
-		return errp.New("chunk must max 4kB")
+		panic("chunk must max 4kB")
 	}
 	var buf bytes.Buffer
 	buf.WriteByte(chunkNum)
@@ -207,9 +209,7 @@ func (device *Device) flashUnsignedFirmware(firmware []byte, progressCallback fu
 	if len(firmware) > firmwareChunks*chunkSize {
 		return errp.New("firmware too big")
 	}
-	if progressCallback != nil {
-		progressCallback(0)
-	}
+	progressCallback(0)
 	buf := bytes.NewBuffer(firmware)
 	totalChunks := uint8(math.Ceil(float64(buf.Len()) / float64(chunkSize)))
 	if err := device.erase(totalChunks); err != nil {
@@ -229,9 +229,7 @@ func (device *Device) flashUnsignedFirmware(firmware []byte, progressCallback fu
 			return err
 		}
 		chunkNum++
-		if progressCallback != nil {
-			progressCallback(float64(chunkNum) / float64(totalChunks))
-		}
+		progressCallback(float64(chunkNum) / float64(totalChunks))
 	}
 	return nil
 }
@@ -284,7 +282,7 @@ func (device *Device) UpgradeFirmware(firmware []byte) error {
 	for seconds := 5; seconds > 0; seconds-- {
 		device.status.RebootSeconds = seconds
 		device.onStatusChanged(device.status)
-		time.Sleep(time.Second)
+		device.sleep(time.Second)
 	}
 	return device.Reboot()
 }

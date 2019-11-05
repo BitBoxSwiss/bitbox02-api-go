@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package bootloader contains the API to the physical device.
 package bootloader_test
 
 import (
+	"bytes"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"testing"
+	"time"
 
 	"github.com/digitalbitbox/bitbox02-api-go/api/bootloader"
 	"github.com/digitalbitbox/bitbox02-api-go/api/common"
@@ -27,12 +30,13 @@ import (
 )
 
 type communicationMock struct {
-	query func([]byte) ([]byte, error)
-	close func()
+	sendFrame func(msg string) error
+	query     func([]byte) ([]byte, error)
+	close     func()
 }
 
 func (communication *communicationMock) SendFrame(msg string) error {
-	panic("TODO")
+	return communication.sendFrame(msg)
 }
 
 func (communication *communicationMock) Query(msg []byte) ([]byte, error) {
@@ -44,10 +48,10 @@ func (communication *communicationMock) Close() {
 }
 
 type testEnv struct {
-	edition       common.Edition
-	communication *communicationMock
-	device        *bootloader.Device
-	currentStatus *bootloader.Status
+	edition         common.Edition
+	communication   *communicationMock
+	onStatusChanged func(*bootloader.Status)
+	device          *bootloader.Device
 }
 
 func testConfigurations(t *testing.T, run func(*testEnv, *testing.T)) {
@@ -58,14 +62,11 @@ func testConfigurations(t *testing.T, run func(*testEnv, *testing.T)) {
 		var env testEnv
 		env.edition = edition
 		env.communication = &communicationMock{}
-		env.currentStatus = nil
 		env.device = bootloader.NewDevice(
 			semver.NewSemVer(1, 0, 1),
 			env.edition,
 			env.communication,
-			func(status *bootloader.Status) {
-				env.currentStatus = status
-			},
+			func(status *bootloader.Status) { env.onStatusChanged(status) },
 		)
 		t.Run(fmt.Sprintf("%v", env), func(t *testing.T) {
 			run(&env, t)
@@ -173,5 +174,112 @@ func TestGetHashes(t *testing.T) {
 			_, _, err = env.device.GetHashes(false, false)
 			require.Error(t, err)
 		}
+	})
+}
+
+// TestUpgradeFirmware tests a successful firmware upgrade with a real-world signed firmware
+// fixture.
+func TestUpgradeFirmware(t *testing.T) {
+	testConfigurations(t, func(env *testEnv, t *testing.T) {
+		if env.edition != common.EditionBTCOnly {
+			return
+		}
+
+		const chunkSize = 4096
+
+		signedFirmware, err := ioutil.ReadFile("testdata/firmware-btc.v4.2.2.signed.bin")
+		if err != nil {
+			panic(err)
+		}
+		unsignedFirmware, err := ioutil.ReadFile("testdata/firmware-btc.v4.2.2.bin")
+		if err != nil {
+			panic(err)
+		}
+		const numChunks = 100
+		const expectedSigData = "0000000027a8678099f9f52b142a0692b320d6053d3f7c637273a236654ce4e5346efaffb35034df24eca2e500bbd24b84ba79799d4d7ad5492516b5122587d41a63d9d7c2565124b98a5d9da8bfab7e566371c936b1435d7980d4c09bc31b84431c2e3c6b62829093f478be5356657aa525d6a5fc793acd2641f9bd2d3587dea6a33ad7c6789655ce072bf02908b5d795a87b6789cac63e98bf7849d740d47fb62f3fef88c6db3cb260c53302eb133a89b3529e2f8ae20e99ed0fe3d32cd30db880ffbc47be63edb71c681a3a0d45716746db7704c915d617fcf1c895ca949bb3adcc9a666c73dd373cdf9d4ccf9ff102bde32307f29ecdbf981b3553af7ba3509ff565000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003d8054281b0f6733469f58e0406cba24fefcea8704cd6e8d990bd98fa33d2b0a0942dcafc81f912216ca86cab2000b6de96f1567d5209ab6167278dc585b011d070000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000017a44e602e19792e468a110b997f74b4149a4aca55e98a8b94f219739886c0227f6267ff582f2c1293f71f5afcb5ba6065ebeb454aa142f389f2bb91da62e4281f557a14e9974a3df39c9451b88766c4de7d1fcb8173fcdef82e316e8a8fd4822947a103aeee373e7c687228fadbd5b7ae3032886da057d53338abd889bff301"
+
+		var currentStatus bootloader.Status
+		env.onStatusChanged = func(status *bootloader.Status) {
+			require.Equal(t, env.device.Status(), status)
+			currentStatus = *status
+		}
+
+		// We record all api messages (and status at the time) and check they are correct after.
+		msgs := [][]byte{}
+		statuses := []bootloader.Status{}
+		env.communication.query = func(msg []byte) ([]byte, error) {
+			msgs = append(msgs, msg)
+			statuses = append(statuses, currentStatus)
+			return []byte{msg[0], 0x00}, nil
+		}
+		env.communication.sendFrame = func(msg string) error {
+			msgs = append(msgs, []byte(msg))
+			statuses = append(statuses, currentStatus)
+			return nil
+		}
+
+		const rebootSeconds = 5
+		sleepCalls := 0
+		env.device.TstSetSleep(func(d time.Duration) {
+			require.Equal(t, time.Second, d)
+			require.True(t, sleepCalls < rebootSeconds)
+			require.True(t, currentStatus.UpgradeSuccessful)
+			require.Equal(t, rebootSeconds-sleepCalls, currentStatus.RebootSeconds)
+			sleepCalls++
+		})
+
+		require.Zero(t, *env.device.Status())
+		require.NoError(t, env.device.UpgradeFirmware(signedFirmware))
+
+		takeOne := func() ([]byte, bootloader.Status) {
+			require.NotEmpty(t, msgs)
+			require.NotEmpty(t, statuses)
+			msg, status := msgs[0], statuses[0]
+			msgs, statuses = msgs[1:], statuses[1:]
+			return msg, status
+		}
+		reassembledFirmware := []byte{}
+
+		msg, status := takeOne()
+		require.True(t, status.Upgrading)
+		require.Zero(t, status.Progress)
+
+		// byte(d) is 100 => 100 chunks
+		// erase and set progress bar to 100 chunks
+		require.Equal(t, []byte("ed"), msg)
+
+		// flash chunks
+		for chunkIndex := 0; chunkIndex < numChunks; chunkIndex++ {
+			msg, status = takeOne()
+
+			require.True(t, status.Upgrading)
+			require.Equal(t, float64(chunkIndex)/float64(numChunks), status.Progress)
+
+			require.Len(t, msg, 2+chunkSize)
+			opCode, index, chunk := msg[0], msg[1], msg[2:]
+			require.Equal(t, byte('w'), opCode)
+			require.Equal(t, byte(chunkIndex), index)
+			reassembledFirmware = append(reassembledFirmware, []byte(chunk)...)
+		}
+		require.Len(t, reassembledFirmware, numChunks*chunkSize)
+		reassembledFirmware, _ = reassembledFirmware[:len(unsignedFirmware)], reassembledFirmware[len(unsignedFirmware):]
+		require.True(t, bytes.Equal(reassembledFirmware, unsignedFirmware))
+
+		// flash sigdata
+		msg, status = takeOne()
+		require.True(t, status.Upgrading)
+		require.Equal(t, 1., status.Progress)
+		require.Equal(t, byte('s'), msg[0])
+		require.Equal(t, expectedSigData, hex.EncodeToString(msg[1:]))
+
+		status = *env.device.Status()
+		require.True(t, status.Upgrading)
+		require.Equal(t, 0., status.Progress)
+		require.True(t, status.UpgradeSuccessful)
+
+		// reboot
+		msg, status = takeOne()
+		require.Equal(t, byte('r'), msg[0])
+		require.Equal(t, 1, status.RebootSeconds)
 	})
 }
