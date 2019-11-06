@@ -102,6 +102,7 @@ type Device struct {
 
 	deviceNoiseStaticPubkey   []byte
 	channelHash               string
+	channelHashAppVerified    bool
 	channelHashDeviceVerified bool
 	sendCipher, receiveCipher *noise.CipherState
 
@@ -143,12 +144,17 @@ func (device *Device) Version() *semver.SemVer {
 	return device.version
 }
 
-// Init initializes the device. It changes the status to StatusRequireAppUpgrade of needed,
-// otherwise performs the attestation check, unlock, and noise pairing.
+// Init initializes the device. It changes the status to StatusRequireAppUpgrade if needed,
+// otherwise performs the attestation check, unlock, and noise pairing. This call is blocking.
+// After this call finishes, Status() will be either:
+// - StatusRequireAppUpgrade
+// - StatusPairingFailed (pairing rejected on the device)
+// - StatusUnpaired (in which the host needs to confirm the pairing with ChannelHashVerify(true))
 func (device *Device) Init() error {
 	device.attestation = false
 	device.deviceNoiseStaticPubkey = nil
 	device.channelHash = ""
+	device.channelHashAppVerified = false
 	device.channelHashDeviceVerified = false
 	device.sendCipher = nil
 	device.receiveCipher = nil
@@ -166,27 +172,25 @@ func (device *Device) Init() error {
 	device.attestation = attestation
 	device.log.Info(fmt.Sprintf("attestation check result: %v", attestation))
 
-	// Go-routine as unlock and pairing can be blocking.
-	go func() {
-		// Before 2.0.0, unlock was invoked automatically by the device before USB communication
-		// started.
-		if device.version.AtLeast(semver.NewSemVer(2, 0, 0)) {
-			_, err := device.communication.Query([]byte(opUnlock))
-			if err != nil {
-				// Most likely the device has been unplugged.
-				device.log.Error(
-					"opUnlock: unknown IO error (most likely the device was unplugged).", err)
-				return
-			}
+	// Before 2.0.0, unlock was invoked automatically by the device before USB communication
+	// started.
+	if device.version.AtLeast(semver.NewSemVer(2, 0, 0)) {
+		_, err := device.communication.Query([]byte(opUnlock))
+		if err != nil {
+			// Most likely the device has been unplugged.
+			return err
 		}
+	}
 
-		device.pair()
-	}()
+	if err := device.pair(); err != nil {
+		// Most likely the device has been unplugged.
+		return err
+	}
 
 	return nil
 }
 
-func (device *Device) pair() {
+func (device *Device) pair() error {
 	cipherSuite := noise.NewCipherSuite(noise.DH25519, noise.CipherChaChaPoly, noise.HashSHA256)
 	keypair := device.config.GetAppNoiseStaticKeypair()
 	if keypair == nil {
@@ -215,10 +219,7 @@ func (device *Device) pair() {
 	}
 	responseBytes, err := device.communication.Query([]byte(opICanHasHandShaek))
 	if err != nil {
-		// Most likely the device has been unplugged.
-		device.log.Error(
-			"opICanHasHandShaek: unknown IO error (most likely the device was unplugged)", err)
-		return
+		return err
 	}
 	if string(responseBytes) != responseSuccess {
 		panic(string(responseBytes))
@@ -230,10 +231,7 @@ func (device *Device) pair() {
 	}
 	responseBytes, err = device.communication.Query(msg)
 	if err != nil {
-		// Most likely the device has been unplugged.
-		device.log.Error(
-			"handshake#0: unknown IO error (most likely the device was unplugged)", err)
-		return
+		return err
 	}
 	_, _, _, err = handshake.ReadMessage(nil, responseBytes)
 	if err != nil {
@@ -245,10 +243,7 @@ func (device *Device) pair() {
 	}
 	responseBytes, err = device.communication.Query(msg)
 	if err != nil {
-		// Most likely the device has been unplugged.
-		device.log.Error(
-			"handshake#1: unknown IO error (most likely the device was unplugged)", err)
-		return
+		return err
 	}
 
 	device.deviceNoiseStaticPubkey = handshake.PeerStatic()
@@ -276,11 +271,7 @@ func (device *Device) pair() {
 
 		response, err := device.communication.Query([]byte(opICanHasPairinVerificashun))
 		if err != nil {
-			// Most likely the device has been unplugged.
-			device.log.Error(
-				"opICanHasPairinVerificashun: unknown IO error (most likely the device was unplugged)",
-				err)
-			return
+			return err
 		}
 		device.channelHashDeviceVerified = string(response) == responseSuccess
 		if device.channelHashDeviceVerified {
@@ -296,6 +287,7 @@ func (device *Device) pair() {
 		device.channelHashDeviceVerified = true
 		device.ChannelHashVerify(true)
 	}
+	return nil
 }
 
 func (device *Device) changeStatus(status Status) {
@@ -335,7 +327,7 @@ func (device *Device) Close() {
 }
 
 func (device *Device) query(request proto.Message) (*messages.Response, error) {
-	if device.sendCipher == nil {
+	if device.sendCipher == nil || !device.channelHashDeviceVerified || !device.channelHashAppVerified {
 		return nil, errp.New("handshake must come first")
 	}
 	requestBytes, err := proto.Marshal(request)
@@ -586,6 +578,7 @@ func (device *Device) ChannelHashVerify(ok bool) {
 	if ok && !device.channelHashDeviceVerified {
 		return
 	}
+	device.channelHashAppVerified = ok
 	if ok {
 		// No critical error, we will just need to re-confirm the pairing next time.
 		_ = device.config.AddDeviceStaticPubkey(device.deviceNoiseStaticPubkey)
@@ -692,7 +685,7 @@ func (device *Device) UpgradeFirmware() error {
 	return device.reboot()
 }
 
-// Reset factory resets the device.
+// Reset factory resets the device. You must call device.Init() afterwards.
 func (device *Device) Reset() error {
 	request := &messages.Request{
 		Request: &messages.Request_Reset_{
@@ -700,10 +693,7 @@ func (device *Device) Reset() error {
 		},
 	}
 	_, err := device.query(request)
-	if err != nil {
-		return err
-	}
-	return device.Init()
+	return err
 }
 
 // ShowMnemonic lets the user export the bip39 mnemonic phrase on the device.
