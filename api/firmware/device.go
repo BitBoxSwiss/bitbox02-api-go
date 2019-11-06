@@ -102,7 +102,6 @@ type Device struct {
 
 	deviceNoiseStaticPubkey   []byte
 	channelHash               string
-	channelHashAppVerified    bool
 	channelHashDeviceVerified bool
 	sendCipher, receiveCipher *noise.CipherState
 
@@ -150,7 +149,6 @@ func (device *Device) Init() error {
 	device.attestation = false
 	device.deviceNoiseStaticPubkey = nil
 	device.channelHash = ""
-	device.channelHashAppVerified = false
 	device.channelHashDeviceVerified = false
 	device.sendCipher = nil
 	device.receiveCipher = nil
@@ -588,7 +586,6 @@ func (device *Device) ChannelHashVerify(ok bool) {
 	if ok && !device.channelHashDeviceVerified {
 		return
 	}
-	device.channelHashAppVerified = ok
 	if ok {
 		// No critical error, we will just need to re-confirm the pairing next time.
 		_ = device.config.AddDeviceStaticPubkey(device.deviceNoiseStaticPubkey)
