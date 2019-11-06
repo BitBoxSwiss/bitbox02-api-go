@@ -40,8 +40,6 @@ var (
 
 // Communication contains functions needed to communicate with the device.
 type Communication interface {
-	SendFrame(string) error
-	ReadFrame() ([]byte, error)
 	Query([]byte) ([]byte, error)
 	Close()
 }
@@ -163,15 +161,18 @@ func (device *Device) Init() error {
 		return nil
 	}
 
-	if device.version.AtLeast(semver.NewSemVer(2, 0, 0)) {
-		attestation, err := device.performAttestation()
-		if err != nil {
-			return err
-		}
-		device.attestation = attestation
-		device.log.Info(fmt.Sprintf("attestation check result: %v", attestation))
+	attestation, err := device.performAttestation()
+	if err != nil {
+		return err
+	}
+	device.attestation = attestation
+	device.log.Info(fmt.Sprintf("attestation check result: %v", attestation))
 
-		go func() {
+	// Go-routine as unlock and pairing can be blocking.
+	go func() {
+		// Before 2.0.0, unlock was invoked automatically by the device before USB communication
+		// started.
+		if device.version.AtLeast(semver.NewSemVer(2, 0, 0)) {
 			_, err := device.communication.Query([]byte(opUnlock))
 			if err != nil {
 				// Most likely the device has been unplugged.
@@ -179,13 +180,11 @@ func (device *Device) Init() error {
 					"opUnlock: unknown IO error (most likely the device was unplugged).", err)
 				return
 			}
-			device.pair()
-		}()
-	} else {
-		// skip warning for v1.0.0, where attestation was not supported.
-		device.attestation = true
+		}
+
 		device.pair()
-	}
+	}()
+
 	return nil
 }
 
@@ -277,32 +276,24 @@ func (device *Device) pair() {
 		device.fireEvent(EventChannelHashChanged)
 		device.changeStatus(StatusUnpaired)
 
-		if err := device.communication.SendFrame(opICanHasPairinVerificashun); err != nil {
+		response, err := device.communication.Query([]byte(opICanHasPairinVerificashun))
+		if err != nil {
 			// Most likely the device has been unplugged.
 			device.log.Error(
-				"opICanHasPairinVerificashun send: unknown IO error (most likely the device was unplugged)",
+				"opICanHasPairinVerificashun: unknown IO error (most likely the device was unplugged)",
 				err)
 			return
 		}
-		go func() {
-			response, err := device.communication.ReadFrame()
-			if err != nil {
-				// Most likely the device has been unplugged.
-				device.log.Error(
-					"opICanHasPairinVerificashun read: unknown IO error (most likely the device was unplugged)",
-					err)
-				return
-			}
-			device.channelHashDeviceVerified = string(response) == responseSuccess
-			if device.channelHashDeviceVerified {
-				device.fireEvent(EventChannelHashChanged)
-			} else {
-				device.sendCipher = nil
-				device.receiveCipher = nil
-				device.channelHash = ""
-				device.changeStatus(StatusPairingFailed)
-			}
-		}()
+		device.channelHashDeviceVerified = string(response) == responseSuccess
+		if device.channelHashDeviceVerified {
+			device.fireEvent(EventChannelHashChanged)
+		} else {
+			device.sendCipher = nil
+			device.receiveCipher = nil
+			device.channelHash = ""
+			device.changeStatus(StatusPairingFailed)
+		}
+
 	} else {
 		device.channelHashDeviceVerified = true
 		device.ChannelHashVerify(true)
