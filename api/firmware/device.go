@@ -146,8 +146,9 @@ func (device *Device) Version() *semver.SemVer {
 	return device.version
 }
 
-// Init implements device.Device.
-func (device *Device) Init(testing bool) error {
+// Init initializes the device. It changes the status to StatusRequireAppUpgrade of needed,
+// otherwise performs the attestation check, unlock, and noise pairing.
+func (device *Device) Init() error {
 	if device.version.AtLeast(lowestNonSupportedFirmwareVersion) {
 		device.changeStatus(StatusRequireAppUpgrade)
 		return nil
