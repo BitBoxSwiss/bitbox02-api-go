@@ -102,6 +102,7 @@ type Device struct {
 
 	deviceNoiseStaticPubkey   []byte
 	channelHash               string
+	channelHashAppVerified    bool
 	channelHashDeviceVerified bool
 	sendCipher, receiveCipher *noise.CipherState
 
@@ -153,6 +154,7 @@ func (device *Device) Init() error {
 	device.attestation = false
 	device.deviceNoiseStaticPubkey = nil
 	device.channelHash = ""
+	device.channelHashAppVerified = false
 	device.channelHashDeviceVerified = false
 	device.sendCipher = nil
 	device.receiveCipher = nil
@@ -325,7 +327,7 @@ func (device *Device) Close() {
 }
 
 func (device *Device) query(request proto.Message) (*messages.Response, error) {
-	if device.sendCipher == nil {
+	if device.sendCipher == nil || !device.channelHashDeviceVerified || !device.channelHashAppVerified {
 		return nil, errp.New("handshake must come first")
 	}
 	requestBytes, err := proto.Marshal(request)
@@ -576,6 +578,7 @@ func (device *Device) ChannelHashVerify(ok bool) {
 	if ok && !device.channelHashDeviceVerified {
 		return
 	}
+	device.channelHashAppVerified = ok
 	if ok {
 		// No critical error, we will just need to re-confirm the pairing next time.
 		_ = device.config.AddDeviceStaticPubkey(device.deviceNoiseStaticPubkey)
