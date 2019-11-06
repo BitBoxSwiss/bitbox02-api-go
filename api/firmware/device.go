@@ -161,15 +161,18 @@ func (device *Device) Init() error {
 		return nil
 	}
 
-	if device.version.AtLeast(semver.NewSemVer(2, 0, 0)) {
-		attestation, err := device.performAttestation()
-		if err != nil {
-			return err
-		}
-		device.attestation = attestation
-		device.log.Info(fmt.Sprintf("attestation check result: %v", attestation))
+	attestation, err := device.performAttestation()
+	if err != nil {
+		return err
+	}
+	device.attestation = attestation
+	device.log.Info(fmt.Sprintf("attestation check result: %v", attestation))
 
-		go func() {
+	// Go-routine as unlock and pairing can be blocking.
+	go func() {
+		// Before 2.0.0, unlock was invoked automatically by the device before USB communication
+		// started.
+		if device.version.AtLeast(semver.NewSemVer(2, 0, 0)) {
 			_, err := device.communication.Query([]byte(opUnlock))
 			if err != nil {
 				// Most likely the device has been unplugged.
@@ -177,13 +180,11 @@ func (device *Device) Init() error {
 					"opUnlock: unknown IO error (most likely the device was unplugged).", err)
 				return
 			}
-			device.pair()
-		}()
-	} else {
-		// skip warning for v1.0.0, where attestation was not supported.
-		device.attestation = true
-		go device.pair()
-	}
+		}
+
+		device.pair()
+	}()
+
 	return nil
 }
 
