@@ -33,9 +33,10 @@ import (
 //go:generate sh -c "protoc --proto_path=messages/ --go_out='import_path=messages,paths=source_relative:messages' messages/*.proto"
 
 var (
-	lowestSupportedFirmwareVersion        = semver.NewSemVer(4, 2, 1)
-	lowestSupportedFirmwareVersionBTCOnly = semver.NewSemVer(4, 2, 2)
-	lowestNonSupportedFirmwareVersion     = semver.NewSemVer(5, 0, 0)
+	lowestSupportedFirmwareVersion                   = semver.NewSemVer(4, 2, 1)
+	lowestSupportedFirmwareVersionBTCOnly            = semver.NewSemVer(4, 2, 2)
+	lowestSupportedFirmwareVersionBitBoxBaseStandard = semver.NewSemVer(4, 3, 0)
+	lowestNonSupportedFirmwareVersion                = semver.NewSemVer(5, 0, 0)
 )
 
 // Communication contains functions needed to communicate with the device.
@@ -651,6 +652,8 @@ func (device *Device) ChannelHashVerify(ok bool) {
 			requireUpgrade = !device.version.AtLeast(lowestSupportedFirmwareVersion)
 		case common.ProductBitBox02BTCOnly:
 			requireUpgrade = !device.version.AtLeast(lowestSupportedFirmwareVersionBTCOnly)
+		case common.ProductBitBoxBaseStandard:
+			requireUpgrade = !device.version.AtLeast(lowestSupportedFirmwareVersionBitBoxBaseStandard)
 		default:
 			device.log.Error(fmt.Sprintf("unrecognized product: %s", device.product), nil)
 		}
