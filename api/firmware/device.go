@@ -567,12 +567,12 @@ func (device *Device) RestoreBackup(id string) error {
 	return nil
 }
 
-// ChannelHash returns the hashed handshake channel binding
+// ChannelHash returns the hashed handshake channel binding.
 func (device *Device) ChannelHash() (string, bool) {
 	return device.channelHash, device.channelHashDeviceVerified
 }
 
-// ChannelHashVerify verifies the ChannelHash
+// ChannelHashVerify verifies the ChannelHash.
 func (device *Device) ChannelHashVerify(ok bool) {
 	device.log.Info(fmt.Sprintf("channelHashVerify: %v", ok))
 	if ok && !device.channelHashDeviceVerified {
