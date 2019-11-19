@@ -661,16 +661,20 @@ func (device *Device) ChannelHashVerify(ok bool) {
 			device.changeStatus(StatusRequireFirmwareUpgrade)
 			return
 		}
-
-		info, err := device.DeviceInfo()
-		if err != nil {
-			device.log.Error("could not get device info", err)
-			return
-		}
-		if info.Initialized {
-			device.changeStatus(StatusInitialized)
-		} else {
+		if device.product == common.ProductBitBoxBaseStandard {
+			// For now, the base has no keystore or password.
 			device.changeStatus(StatusUninitialized)
+		} else {
+			info, err := device.DeviceInfo()
+			if err != nil {
+				device.log.Error("could not get device info", err)
+				return
+			}
+			if info.Initialized {
+				device.changeStatus(StatusInitialized)
+			} else {
+				device.changeStatus(StatusUninitialized)
+			}
 		}
 	} else {
 		device.changeStatus(StatusPairingFailed)
