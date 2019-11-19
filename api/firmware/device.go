@@ -86,6 +86,7 @@ const (
 	opNoiseMsg                  = "n"
 	opAttestation               = "a"
 	opUnlock                    = "u"
+	opInfo                      = "i"
 
 	responseSuccess = "\x00"
 )
@@ -138,6 +139,59 @@ func NewDevice(
 		status:        StatusConnected,
 		log:           log,
 	}
+}
+
+// info uses the opInfo api endpoint to learn about the version, platform/edition, and unlock
+// status (true if unlocked).
+func (device *Device) info() (*semver.SemVer, common.Product, bool, error) {
+	response, err := device.communication.Query([]byte(opInfo))
+	if err != nil {
+		return nil, "", false, err
+	}
+	if len(response) < 4 {
+		return nil, "", false, errp.New("unexpected response")
+	}
+	versionStrLen, response := int(response[0]), response[1:]
+	versionBytes, response := response[:versionStrLen], response[versionStrLen:]
+	version, err := semver.NewSemVerFromString(string(versionBytes))
+	if err != nil {
+		return nil, "", false, err
+	}
+	platformByte, response := response[0], response[1:]
+	editionByte, response := response[0], response[1:]
+	const (
+		platformBitBox02   = 0x00
+		platformBitBoxBase = 0x01
+	)
+	products := map[byte]map[byte]common.Product{
+		platformBitBox02: {
+			0x00: common.ProductBitBox02Multi,
+			0x01: common.ProductBitBox02BTCOnly,
+		},
+		platformBitBoxBase: {
+			0x00: common.ProductBitBoxBaseStandard,
+		},
+	}
+	editions, ok := products[platformByte]
+	if !ok {
+		return nil, "", false, errp.Newf("unrecognized platform: %v", platformByte)
+	}
+	product, ok := editions[editionByte]
+	if !ok {
+		return nil, "", false, errp.Newf("unrecognized platform/edition: %v/%v", platformByte, editionByte)
+	}
+
+	var unlocked bool
+	unlockedByte := response[0]
+	switch unlockedByte {
+	case 0x00:
+		unlocked = false
+	case 0x01:
+		unlocked = true
+	default:
+		return nil, "", false, errp.New("unexpected reply")
+	}
+	return version, product, unlocked, nil
 }
 
 // Version returns the firmware version.
