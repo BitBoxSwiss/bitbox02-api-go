@@ -94,7 +94,7 @@ type Device struct {
 	communication Communication
 	// firmware version.
 	version *semver.SemVer
-	edition common.Edition
+	product common.Product
 
 	config ConfigInterface
 
@@ -124,7 +124,7 @@ type DeviceInfo struct {
 // NewDevice creates a new instance of Device.
 func NewDevice(
 	version *semver.SemVer,
-	edition common.Edition,
+	product common.Product,
 	config ConfigInterface,
 	communication Communication,
 	log Logger,
@@ -132,7 +132,7 @@ func NewDevice(
 	return &Device{
 		communication: communication,
 		version:       version,
-		edition:       edition,
+		product:       product,
 		config:        config,
 		status:        StatusConnected,
 		log:           log,
@@ -583,13 +583,13 @@ func (device *Device) ChannelHashVerify(ok bool) {
 		// No critical error, we will just need to re-confirm the pairing next time.
 		_ = device.config.AddDeviceStaticPubkey(device.deviceNoiseStaticPubkey)
 		requireUpgrade := false
-		switch device.edition {
-		case common.EditionStandard:
+		switch device.product {
+		case common.ProductBitBox02Multi:
 			requireUpgrade = !device.version.AtLeast(lowestSupportedFirmwareVersion)
-		case common.EditionBTCOnly:
+		case common.ProductBitBox02BTCOnly:
 			requireUpgrade = !device.version.AtLeast(lowestSupportedFirmwareVersionBTCOnly)
 		default:
-			device.log.Error(fmt.Sprintf("unrecognized edition: %s", device.edition), nil)
+			device.log.Error(fmt.Sprintf("unrecognized product: %s", device.product), nil)
 		}
 		if requireUpgrade {
 			device.changeStatus(StatusRequireFirmwareUpgrade)
@@ -738,15 +738,15 @@ func (device *Device) RestoreFromMnemonic() error {
 	return nil
 }
 
-// Edition returns the device edition.
-func (device *Device) Edition() common.Edition {
-	return device.edition
+// Product returns the device product.
+func (device *Device) Product() common.Product {
+	return device.product
 }
 
 // SupportsETH returns true if ETH is supported by the device api.
 // coinCode is eth/teth/reth or eth-erc20-xyz, ...
 func (device *Device) SupportsETH(coinCode string) bool {
-	if device.edition != common.EditionStandard {
+	if device.product != common.ProductBitBox02Multi {
 		return false
 	}
 	if device.version.AtLeast(semver.NewSemVer(4, 0, 0)) {
@@ -762,5 +762,5 @@ func (device *Device) SupportsETH(coinCode string) bool {
 
 // SupportsLTC returns true if LTC is supported by the device api.
 func (device *Device) SupportsLTC() bool {
-	return device.edition == common.EditionStandard
+	return device.product == common.ProductBitBox02Multi
 }

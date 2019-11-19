@@ -48,23 +48,24 @@ func (communication *communicationMock) Close() {
 }
 
 type testEnv struct {
-	edition         common.Edition
+	product         common.Product
 	communication   *communicationMock
 	onStatusChanged func(*bootloader.Status)
 	device          *bootloader.Device
 }
 
 func testConfigurations(t *testing.T, run func(*testEnv, *testing.T)) {
-	for _, edition := range []common.Edition{
-		common.EditionStandard,
-		common.EditionBTCOnly,
+	for _, product := range []common.Product{
+		common.ProductBitBox02Multi,
+		common.ProductBitBox02BTCOnly,
+		common.ProductBitBoxBaseStandard,
 	} {
 		var env testEnv
-		env.edition = edition
+		env.product = product
 		env.communication = &communicationMock{}
 		env.device = bootloader.NewDevice(
 			semver.NewSemVer(1, 0, 1),
-			env.edition,
+			env.product,
 			env.communication,
 			func(status *bootloader.Status) { env.onStatusChanged(status) },
 		)
@@ -74,9 +75,9 @@ func testConfigurations(t *testing.T, run func(*testEnv, *testing.T)) {
 	}
 }
 
-func TestEdition(t *testing.T) {
+func TestProduct(t *testing.T) {
 	testConfigurations(t, func(env *testEnv, t *testing.T) {
-		require.Equal(t, env.edition, env.device.Edition())
+		require.Equal(t, env.product, env.device.Product())
 	})
 
 }
@@ -183,7 +184,7 @@ func TestGetHashes(t *testing.T) {
 // fixture.
 func TestUpgradeFirmware(t *testing.T) {
 	testConfigurations(t, func(env *testEnv, t *testing.T) {
-		if env.edition != common.EditionBTCOnly {
+		if env.product != common.ProductBitBox02BTCOnly {
 			return
 		}
 
