@@ -45,8 +45,9 @@ const (
 )
 
 var sigDataMagic = map[common.Product]uint32{
-	common.ProductBitBox02Multi:   0x653f362b,
-	common.ProductBitBox02BTCOnly: 0x11233B0B,
+	common.ProductBitBox02Multi:      0x653f362b,
+	common.ProductBitBox02BTCOnly:    0x11233B0B,
+	common.ProductBitBoxBaseStandard: 0xAB6BD345,
 }
 
 // Communication contains functions needed to communicate with the device.
