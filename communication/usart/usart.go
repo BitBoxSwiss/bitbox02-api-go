@@ -69,9 +69,12 @@ func computeChecksum(data []byte) []byte {
 			b2 = data[i+1]
 		}
 		result += uint32(binary.LittleEndian.Uint16([]byte{b1, b2}))
+		if result > 0xFFFF {
+			result -= 0xFFFF
+		}
 	}
 	resultBytes := make([]byte, 2)
-	binary.LittleEndian.PutUint16(resultBytes, uint16(result+result>>16))
+	binary.LittleEndian.PutUint16(resultBytes, uint16(result))
 	return resultBytes
 }
 
