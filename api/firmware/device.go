@@ -97,7 +97,7 @@ type Device struct {
 	communication Communication
 	// firmware version.
 	version *semver.SemVer
-	product common.Product
+	product *common.Product
 
 	config ConfigInterface
 
@@ -125,13 +125,22 @@ type DeviceInfo struct {
 }
 
 // NewDevice creates a new instance of Device.
+// version:
+//   Can be given if known at the time of instantiation, e.g. by parsing the USB HID product string.
+//   It must be provided if the version could be less than 4.3.0.
+//   If nil, the version will be queried from the device using the OP_INFO api endpoint. Do this
+//   when you are sure the firmware version is bigger or equal to 4.3.0.
+// product: same deal as with the version, after 4.3.0 it can be inferred by OP_INFO.
 func NewDevice(
 	version *semver.SemVer,
-	product common.Product,
+	product *common.Product,
 	config ConfigInterface,
 	communication Communication,
 	log Logger,
 ) *Device {
+	if (version == nil) != (product == nil) {
+		panic("both version and product have to be specified, or none")
+	}
 	return &Device{
 		communication: communication,
 		version:       version,
@@ -197,7 +206,34 @@ func (device *Device) info() (*semver.SemVer, common.Product, bool, error) {
 
 // Version returns the firmware version.
 func (device *Device) Version() *semver.SemVer {
+	if device.version == nil {
+		panic("version not set; Init() must be called first")
+	}
 	return device.version
+}
+
+// inferVersionAndProduct either sets the version and product by using OP_INFO if they were not
+// provided. In this case, the firmware is assumed to be >=v4.3.0, before that OP_INFO was not
+// available.
+func (device *Device) inferVersionAndProduct() error {
+	// The version has not been provided, so we try to get it from OP_INFO.
+	if device.version == nil {
+		version, product, _, err := device.info()
+		if err != nil {
+			return errp.New(
+				"OP_INFO unavailable; need to provide version and product via the USB HID descriptor")
+		}
+		device.log.Info(fmt.Sprintf("OP_INFO: version=%s, product=%s", version, product))
+
+		// sanity check
+		if !version.AtLeast(semver.NewSemVer(4, 3, 0)) {
+			return errp.New("OP_INFO is not supposed to exist below v4.3.0")
+		}
+
+		device.version = version
+		device.product = &product
+	}
+	return nil
 }
 
 // Init initializes the device. It changes the status to StatusRequireAppUpgrade if needed,
@@ -216,6 +252,9 @@ func (device *Device) Init() error {
 	device.receiveCipher = nil
 	device.changeStatus(StatusConnected)
 
+	if err := device.inferVersionAndProduct(); err != nil {
+		return err
+	}
 	if device.version.AtLeast(lowestNonSupportedFirmwareVersion) {
 		device.changeStatus(StatusRequireAppUpgrade)
 		return nil
@@ -647,7 +686,7 @@ func (device *Device) ChannelHashVerify(ok bool) {
 		// No critical error, we will just need to re-confirm the pairing next time.
 		_ = device.config.AddDeviceStaticPubkey(device.deviceNoiseStaticPubkey)
 		requireUpgrade := false
-		switch device.product {
+		switch *device.product {
 		case common.ProductBitBox02Multi:
 			requireUpgrade = !device.version.AtLeast(lowestSupportedFirmwareVersion)
 		case common.ProductBitBox02BTCOnly:
@@ -655,13 +694,13 @@ func (device *Device) ChannelHashVerify(ok bool) {
 		case common.ProductBitBoxBaseStandard:
 			requireUpgrade = !device.version.AtLeast(lowestSupportedFirmwareVersionBitBoxBaseStandard)
 		default:
-			device.log.Error(fmt.Sprintf("unrecognized product: %s", device.product), nil)
+			device.log.Error(fmt.Sprintf("unrecognized product: %s", *device.product), nil)
 		}
 		if requireUpgrade {
 			device.changeStatus(StatusRequireFirmwareUpgrade)
 			return
 		}
-		if device.product == common.ProductBitBoxBaseStandard {
+		if *device.product == common.ProductBitBoxBaseStandard {
 			// For now, the base has no keystore or password.
 			device.changeStatus(StatusUninitialized)
 		} else {
@@ -813,13 +852,16 @@ func (device *Device) RestoreFromMnemonic() error {
 
 // Product returns the device product.
 func (device *Device) Product() common.Product {
-	return device.product
+	if device.product == nil {
+		panic("product not set; Init() must be called first")
+	}
+	return *device.product
 }
 
 // SupportsETH returns true if ETH is supported by the device api.
 // coinCode is eth/teth/reth or eth-erc20-xyz, ...
 func (device *Device) SupportsETH(coinCode string) bool {
-	if device.product != common.ProductBitBox02Multi {
+	if *device.product != common.ProductBitBox02Multi {
 		return false
 	}
 	if device.version.AtLeast(semver.NewSemVer(4, 0, 0)) {
@@ -835,5 +877,5 @@ func (device *Device) SupportsETH(coinCode string) bool {
 
 // SupportsLTC returns true if LTC is supported by the device api.
 func (device *Device) SupportsLTC() bool {
-	return device.product == common.ProductBitBox02Multi
+	return *device.product == common.ProductBitBox02Multi
 }
