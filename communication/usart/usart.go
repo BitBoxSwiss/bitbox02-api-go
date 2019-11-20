@@ -18,6 +18,7 @@ package usart
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"io"
 	"sync"
 
@@ -25,6 +26,11 @@ import (
 )
 
 const version byte = 0x01
+const endpointError = 0xff
+
+// ErrEndpointUnavailable is returned if the device returns an endpoint error, which means we are
+// talking to the wrong endpoint (firmware vs. bootloader).
+var ErrEndpointUnavailable = errors.New("endpoint not available")
 
 func newBuffer() *bytes.Buffer {
 	// This needs to be allocated exactly like this (not with nil or new(bytes.Buffer) etc), so that
@@ -69,9 +75,12 @@ func computeChecksum(data []byte) []byte {
 			b2 = data[i+1]
 		}
 		result += uint32(binary.LittleEndian.Uint16([]byte{b1, b2}))
+		if result > 0xFFFF {
+			result -= 0xFFFF
+		}
 	}
 	resultBytes := make([]byte, 2)
-	binary.LittleEndian.PutUint16(resultBytes, uint16(result+result>>16))
+	binary.LittleEndian.PutUint16(resultBytes, uint16(result))
 	return resultBytes
 }
 
@@ -153,19 +162,22 @@ func (communication *Communication) readFrame() ([]byte, error) {
 	}
 
 	if len(data) < 4 {
-		return nil, errp.New("expected at least 5 bytes (version 1, endpoint 1, cmd 1, checksum 2)")
+		return nil, errp.New("expected at least 4 bytes (version 1, cmd 1, checksum 2)")
 	}
 	replyVersion, cmd := data[0], data[1]
 	if replyVersion != version {
 		return nil, errp.Newf("unexpected version %v, expected %v", replyVersion, version)
 	}
-	if cmd != communication.cmd {
-		return nil, errp.Newf("unexpected cmd %v, expected %v", cmd, communication.cmd)
-	}
 	data, expectedChecksum := data[:len(data)-2], data[len(data)-2:]
 	checksum := computeChecksum(data)
 	if !bytes.Equal(checksum, expectedChecksum) {
 		return nil, errp.Newf("checksum mismatch, expected: %v, got: %v", expectedChecksum, checksum)
+	}
+	if cmd == endpointError {
+		return nil, ErrEndpointUnavailable
+	}
+	if cmd != communication.cmd {
+		return nil, errp.Newf("unexpected cmd %v, expected %v", cmd, communication.cmd)
 	}
 	return data[2:], nil
 }
