@@ -156,7 +156,7 @@ func (communication *Communication) readFrame() ([]byte, error) {
 	}
 
 	if len(data) < 4 {
-		return nil, errp.New("expected at least 5 bytes (version 1, endpoint 1, cmd 1, checksum 2)")
+		return nil, errp.New("expected at least 4 bytes (version 1, cmd 1, checksum 2)")
 	}
 	replyVersion, cmd := data[0], data[1]
 	if replyVersion != version {
