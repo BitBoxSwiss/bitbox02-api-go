@@ -40,6 +40,7 @@ var (
 
 // Communication contains functions needed to communicate with the device.
 type Communication interface {
+	SendFrame(string) error
 	Query([]byte) ([]byte, error)
 	Close()
 }
@@ -326,7 +327,7 @@ func (device *Device) Close() {
 	device.communication.Close()
 }
 
-func (device *Device) query(request proto.Message) (*messages.Response, error) {
+func (device *Device) requestBytesEncrypted(request proto.Message) ([]byte, error) {
 	if device.sendCipher == nil || !device.channelHashDeviceVerified || !device.channelHashAppVerified {
 		return nil, errp.New("handshake must come first")
 	}
@@ -337,6 +338,14 @@ func (device *Device) query(request proto.Message) (*messages.Response, error) {
 	requestBytesEncrypted := device.sendCipher.Encrypt(nil, nil, requestBytes)
 	if device.version.AtLeast(semver.NewSemVer(4, 0, 0)) {
 		requestBytesEncrypted = append([]byte(opNoiseMsg), requestBytesEncrypted...)
+	}
+	return requestBytesEncrypted, nil
+}
+
+func (device *Device) query(request proto.Message) (*messages.Response, error) {
+	requestBytesEncrypted, err := device.requestBytesEncrypted(request)
+	if err != nil {
+		return nil, err
 	}
 	responseBytes, err := device.communication.Query(requestBytesEncrypted)
 	if err != nil {
@@ -676,8 +685,11 @@ func (device *Device) reboot() error {
 			Reboot: &messages.RebootRequest{},
 		},
 	}
-	_, err := device.query(request)
-	return err
+	requestBytesEncrypted, err := device.requestBytesEncrypted(request)
+	if err != nil {
+		return err
+	}
+	return device.communication.SendFrame(string(requestBytesEncrypted))
 }
 
 // UpgradeFirmware reboots into the bootloader so a firmware can be flashed.
