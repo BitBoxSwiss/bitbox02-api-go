@@ -55,6 +55,10 @@ func (device *deviceMock) Close() error {
 // TestReadWrite encodes random data and checks that decoding is the inverse of encoding.
 func TestReadWrite(t *testing.T) {
 	f := func(cmd byte, data, prefix, suffix []byte) bool {
+		if cmd == 0xFF {
+			// Special "cmd" denotes error, skip here.
+			return true
+		}
 		writer := new(bytes.Buffer)
 		err := usart.NewCommunication(
 			&deviceMock{Writer: writer},
@@ -119,4 +123,22 @@ func TestRead(t *testing.T) {
 			require.Equal(t, test.decoded, hex.EncodeToString(read))
 		})
 	}
+}
+
+func TestReadEndpointError(t *testing.T) {
+	communication := usart.NewCommunication(
+		&deviceMock{
+			Reader: bytes.NewReader([]byte{
+				0x7e,       // frame marker
+				0x01,       // version
+				0xFF,       // invalid endpoint
+				0xab,       // specific error code
+				0xac, 0xff, // checksum
+				0x7e, // frame marker
+			}),
+		},
+		0x01,
+	)
+	_, err := communication.ReadFrame()
+	require.Equal(t, usart.ErrEndpointUnavailable, err)
 }
