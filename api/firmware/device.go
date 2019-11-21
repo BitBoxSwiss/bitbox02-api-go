@@ -484,6 +484,9 @@ func (device *Device) Random() ([]byte, error) {
 
 // SetDeviceName sends a request to the device using protobuf to set the device name
 func (device *Device) SetDeviceName(deviceName string) error {
+	if len(deviceName) > 64 {
+		return errp.New("device name too long")
+	}
 	request := &messages.Request{
 		Request: &messages.Request_DeviceName{
 			DeviceName: &messages.SetDeviceNameRequest{

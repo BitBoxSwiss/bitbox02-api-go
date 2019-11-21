@@ -260,3 +260,37 @@ func TestRandom(t *testing.T) {
 		require.Equal(t, expectedErr, err)
 	})
 }
+
+func TestSetDeviceName(t *testing.T) {
+	testConfigurations(t, func(env *testEnv, t *testing.T) {
+		// Name too long.
+		require.Error(t, env.device.SetDeviceName(
+			"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+
+		expected := "Satoshi"
+		env.onRequest = func(request *messages.Request) *messages.Response {
+			setDeviceName, ok := request.Request.(*messages.Request_DeviceName)
+			require.True(t, ok)
+			require.Equal(t, expected, setDeviceName.DeviceName.Name)
+			return responseSuccess
+		}
+		require.NoError(t, env.device.SetDeviceName(expected))
+
+		// Wrong response.
+		env.onRequest = func(request *messages.Request) *messages.Response {
+			return &messages.Response{
+				Response: &messages.Response_RandomNumber{
+					RandomNumber: &messages.RandomNumberResponse{},
+				},
+			}
+		}
+		require.Error(t, env.device.SetDeviceName(expected))
+
+		// Query error.
+		expectedErr := errors.New("error")
+		env.communication.query = func(msg []byte) ([]byte, error) {
+			return nil, expectedErr
+		}
+		require.Equal(t, expectedErr, env.device.SetDeviceName(expected))
+	})
+}
