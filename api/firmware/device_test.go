@@ -75,10 +75,10 @@ func newDevice(
 	t *testing.T,
 	version *semver.SemVer,
 	product common.Product,
+	communication *communicationMock,
 	onRequest func(*messages.Request) *messages.Response,
 ) *firmware.Device {
 
-	communication := &communicationMock{}
 	device := firmware.NewDevice(
 		version,
 		&product,
@@ -172,10 +172,11 @@ var responseSuccess = &messages.Response{
 }
 
 type testEnv struct {
-	version   *semver.SemVer
-	product   common.Product
-	device    *firmware.Device
-	onRequest func(*messages.Request) *messages.Response
+	version       *semver.SemVer
+	product       common.Product
+	communication *communicationMock
+	device        *firmware.Device
+	onRequest     func(*messages.Request) *messages.Response
 }
 
 func testConfigurations(t *testing.T, run func(*testEnv, *testing.T)) {
@@ -193,10 +194,13 @@ func testConfigurations(t *testing.T, run func(*testEnv, *testing.T)) {
 			var env testEnv
 			env.version = version
 			env.product = product
+			env.communication = &communicationMock{}
+
 			env.device = newDevice(
 				t,
 				env.version,
 				product,
+				env.communication,
 				func(request *messages.Request) *messages.Response { return env.onRequest(request) },
 			)
 			t.Run(fmt.Sprintf("%v", env), func(t *testing.T) {
@@ -209,5 +213,14 @@ func testConfigurations(t *testing.T, run func(*testEnv, *testing.T)) {
 func TestVersion(t *testing.T) {
 	testConfigurations(t, func(env *testEnv, t *testing.T) {
 		require.Equal(t, env.version, env.device.Version())
+	})
+}
+
+func TestClose(t *testing.T) {
+	testConfigurations(t, func(env *testEnv, t *testing.T) {
+		called := false
+		env.communication.close = func() { called = true }
+		env.device.Close()
+		require.True(t, called)
 	})
 }
