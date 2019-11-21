@@ -50,7 +50,6 @@ linters-settings:
       - typeSwitchVar
       - typeUnparen
       - underef
-      - unlambda
       - unslice
       - defaultCaseOrder
   gocyclo:
@@ -97,6 +96,7 @@ linters:
     - stylecheck
     - dupl
     - wsl
+    - interfacer
   disable-all: false
 
 issues:
