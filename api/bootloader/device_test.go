@@ -79,7 +79,6 @@ func TestProduct(t *testing.T) {
 	testConfigurations(t, func(env *testEnv, t *testing.T) {
 		require.Equal(t, env.product, env.device.Product())
 	})
-
 }
 
 func TestClose(t *testing.T) {
