@@ -63,21 +63,6 @@ type Logger interface {
 	Debug(msg string)
 }
 
-// Event instances are sent to the onEvent callback.
-type Event string
-
-const (
-	// EventChannelHashChanged is fired when the return values of ChannelHash() change.
-	EventChannelHashChanged Event = "channelHashChanged"
-
-	// EventStatusChanged is fired when the status changes. Check the status using Status().
-	EventStatusChanged Event = "statusChanged"
-
-	// EventAttestationCheckFailed is fired when the device does not pass the attestation signature
-	// check, indicating that it might not be an authentic device.
-	EventAttestationCheckFailed Event = "attestationCheckFailed"
-)
-
 const (
 	opICanHasHandShaek          = "h"
 	opICanHasPairinVerificashun = "v"
@@ -291,26 +276,6 @@ func (device *Device) changeStatus(status Status) {
 func (device *Device) Status() Status {
 	device.log.Debug(fmt.Sprintf("Device status: %v", device.status))
 	return device.status
-}
-
-// SetOnEvent installs the callback which will be called with various events.
-func (device *Device) SetOnEvent(onEvent func(Event, interface{})) {
-	device.mu.Lock()
-	defer device.mu.Unlock()
-	device.onEvent = onEvent
-}
-
-// fireEvent calls device.onEvent callback if non-nil.
-// It blocks for the entire duration of the call.
-// The read-only lock is released before calling device.onEvent.
-func (device *Device) fireEvent(event Event) {
-	device.mu.RLock()
-	f := device.onEvent
-	device.mu.RUnlock()
-	if f != nil {
-		device.log.Info(fmt.Sprintf("fire event: %s", event))
-		f(event, nil)
-	}
 }
 
 // Close implements device.Device.
