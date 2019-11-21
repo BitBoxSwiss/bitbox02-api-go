@@ -50,7 +50,6 @@ linters-settings:
       - typeSwitchVar
       - typeUnparen
       - underef
-      - unlambda
       - unslice
       - defaultCaseOrder
   gocyclo:
