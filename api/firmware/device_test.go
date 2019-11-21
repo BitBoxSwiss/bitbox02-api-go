@@ -16,6 +16,7 @@ package firmware_test
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -222,5 +223,40 @@ func TestClose(t *testing.T) {
 		env.communication.close = func() { called = true }
 		env.device.Close()
 		require.True(t, called)
+	})
+}
+
+func TestRandom(t *testing.T) {
+	testConfigurations(t, func(env *testEnv, t *testing.T) {
+		expected := []byte{1, 2, 3}
+		env.onRequest = func(request *messages.Request) *messages.Response {
+			_, ok := request.Request.(*messages.Request_RandomNumber)
+			require.True(t, ok)
+			return &messages.Response{
+				Response: &messages.Response_RandomNumber{
+					RandomNumber: &messages.RandomNumberResponse{
+						Number: expected,
+					},
+				},
+			}
+		}
+		random, err := env.device.Random()
+		require.NoError(t, err)
+		require.Equal(t, expected, random)
+
+		// Wrong response.
+		env.onRequest = func(request *messages.Request) *messages.Response {
+			return responseSuccess
+		}
+		_, err = env.device.Random()
+		require.Error(t, err)
+
+		// Query error.
+		expectedErr := errors.New("error")
+		env.communication.query = func(msg []byte) ([]byte, error) {
+			return nil, expectedErr
+		}
+		_, err = env.device.Random()
+		require.Equal(t, expectedErr, err)
 	})
 }
