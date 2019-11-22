@@ -118,19 +118,8 @@ func newDevice(
 			return msgSend, nil
 		}
 
-		switch msg[0] {
-		case byte('a'): // OP_ATTESTATION
-			return make([]byte, 1+32+64+64+32+64), nil
-		case byte('u'): // OP_UNLOCK
-			return []byte{0x02}, nil // OP_STATUS_FAILURE_UNINITIALIZED
-		case byte('h'): // OP_I_CAN_HAS_HANDSHAKE
-			shakingHands = true
-			return []byte{0x00}, nil // OP_STATUS_SUCCESS
-		case byte('v'): // OP_I_CAN_HAS_PAIRIN_VERIFICASHUN
-			// confirm pairing
-			return []byte{0x00}, nil // OP_STATUS_SUCCESS
-		case byte('n'): // OP_NOISE_MSG
-			decrypted, err := receiveCipher.Decrypt(nil, nil, msg[1:])
+		handleProtobufMsg := func(msg []byte) ([]byte, error) {
+			decrypted, err := receiveCipher.Decrypt(nil, nil, msg)
 			require.NoError(t, err)
 
 			request := &messages.Request{}
@@ -143,8 +132,31 @@ func newDevice(
 			require.NoError(t, err)
 			return sendCipher.Encrypt(nil, nil, responseBytes), nil
 		}
-		require.Fail(t, "unexpected opcode")
-		return nil, nil
+
+		switch msg[0] {
+		case byte('a'): // OP_ATTESTATION
+			if !version.AtLeast(semver.NewSemVer(2, 0, 0)) {
+				break
+			}
+			return make([]byte, 1+32+64+64+32+64), nil
+		case byte('u'): // OP_UNLOCK
+			if !version.AtLeast(semver.NewSemVer(2, 0, 0)) {
+				break
+			}
+			return []byte{0x02}, nil // OP_STATUS_FAILURE_UNINITIALIZED
+		case byte('h'): // OP_I_CAN_HAS_HANDSHAKE
+			shakingHands = true
+			return []byte{0x00}, nil // OP_STATUS_SUCCESS
+		case byte('v'): // OP_I_CAN_HAS_PAIRIN_VERIFICASHUN
+			// confirm pairing
+			return []byte{0x00}, nil // OP_STATUS_SUCCESS
+		case byte('n'): // OP_NOISE_MSG
+			if !version.AtLeast(semver.NewSemVer(4, 0, 0)) {
+				break
+			}
+			return handleProtobufMsg(msg[1:])
+		}
+		return handleProtobufMsg(msg)
 	}
 	require.NoError(t, device.Init())
 	if version.AtLeast(firmware.TstLowestNonSupportedFirmwareVersion) {
@@ -166,6 +178,44 @@ func newDevice(
 	}
 	device.ChannelHashVerify(true)
 
+	{ // Test upgrade required and actual upgrade, which for the firmware only means to reboot into the bootloader.
+		lowestSupportedFirmwareVersion, ok := firmware.TstLowestSupportedFirmwareVersions[product]
+		require.True(t, ok)
+		if !version.AtLeast(lowestSupportedFirmwareVersion) {
+			require.Equal(t, firmware.StatusRequireFirmwareUpgrade, device.Status())
+
+			// Test upgrade.
+			// Expecting reboot command (with no response)
+			called := false
+			communication.sendFrame = func(msg string) error {
+				called = true
+				if version.AtLeast(semver.NewSemVer(4, 0, 0)) {
+					require.Equal(t, "n", msg[:1], version) // OP_NOISE
+					msg = msg[1:]
+				}
+
+				decrypted, err := receiveCipher.Decrypt(nil, nil, []byte(msg))
+				require.NoError(t, err)
+
+				request := &messages.Request{}
+				require.NoError(t, proto.Unmarshal(decrypted, request))
+
+				require.NotNil(t, request)
+				_, ok := request.Request.(*messages.Request_Reboot)
+				require.True(t, ok)
+				return nil
+			}
+
+			// Actually, before v4.0.0 there was no opNoise, so the encrypted reboot command could
+			// by chance start with opUnlock or opAttestation, in which case those api endpoints
+			// would be called instead, resulting in an error in UpgradeFirmware(). We do not test
+			// this explicitly now, a re-try usually solves the issue for the user.
+			require.NoError(t, device.UpgradeFirmware())
+			require.True(t, called)
+			return nil
+		}
+	}
+
 	handleRequest = onRequest
 	return device
 }
@@ -186,7 +236,13 @@ type testEnv struct {
 
 func testConfigurations(t *testing.T, run func(*testEnv, *testing.T)) {
 	versions := []*semver.SemVer{
+		semver.NewSemVer(1, 0, 0),
+		semver.NewSemVer(2, 0, 0),
+		semver.NewSemVer(3, 0, 0),
+		semver.NewSemVer(4, 1, 0),
+		semver.NewSemVer(4, 1, 1),
 		semver.NewSemVer(4, 2, 0),
+		semver.NewSemVer(4, 2, 1),
 		semver.NewSemVer(4, 3, 0),
 		firmware.TstLowestNonSupportedFirmwareVersion,
 	}
@@ -214,7 +270,7 @@ func testConfigurations(t *testing.T, run func(*testEnv, *testing.T)) {
 			if env.device == nil {
 				continue
 			}
-			t.Run(fmt.Sprintf("%v", env), func(t *testing.T) {
+			t.Run(fmt.Sprintf("%v %s", env, env.version), func(t *testing.T) {
 				run(&env, t)
 			})
 		}

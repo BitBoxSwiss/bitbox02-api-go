@@ -15,5 +15,17 @@
 // Package firmware contains the API to the physical device.
 package firmware
 
+import (
+	"github.com/digitalbitbox/bitbox02-api-go/api/common"
+	"github.com/digitalbitbox/bitbox02-api-go/util/semver"
+)
+
 // TstLowestNonSupportedFirmwareVersion exposes lowestNonSupportedFirmwareVersion to tests.
 var TstLowestNonSupportedFirmwareVersion = lowestNonSupportedFirmwareVersion
+
+// TstLowestSupportedFirmwareVersions exposes the minimum versions per product to tests.
+var TstLowestSupportedFirmwareVersions = map[common.Product]*semver.SemVer{
+	common.ProductBitBox02Multi:      lowestSupportedFirmwareVersion,
+	common.ProductBitBox02BTCOnly:    lowestSupportedFirmwareVersionBTCOnly,
+	common.ProductBitBoxBaseStandard: lowestSupportedFirmwareVersionBitBoxBaseStandard,
+}
