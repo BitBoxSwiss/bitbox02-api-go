@@ -147,6 +147,10 @@ func newDevice(
 		return nil, nil
 	}
 	require.NoError(t, device.Init())
+	if version.AtLeast(firmware.TstLowestNonSupportedFirmwareVersion) {
+		require.Equal(t, firmware.StatusRequireAppUpgrade, device.Status())
+		return nil
+	}
 
 	// ChannelHashVerify calls DeviceInfo() to figure out if the device is initialized or not.
 	handleRequest = func(request *messages.Request) *messages.Response {
@@ -184,6 +188,7 @@ func testConfigurations(t *testing.T, run func(*testEnv, *testing.T)) {
 	versions := []*semver.SemVer{
 		semver.NewSemVer(4, 2, 0),
 		semver.NewSemVer(4, 3, 0),
+		firmware.TstLowestNonSupportedFirmwareVersion,
 	}
 	products := []common.Product{
 		common.ProductBitBox02Multi,
@@ -204,6 +209,11 @@ func testConfigurations(t *testing.T, run func(*testEnv, *testing.T)) {
 				env.communication,
 				func(request *messages.Request) *messages.Response { return env.onRequest(request) },
 			)
+			// Device could not be initialized (unit tests for this in `newDevice()`), so there is
+			// nothing more to do.
+			if env.device == nil {
+				continue
+			}
 			t.Run(fmt.Sprintf("%v", env), func(t *testing.T) {
 				run(&env, t)
 			})
