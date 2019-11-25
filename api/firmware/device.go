@@ -83,7 +83,8 @@ type Device struct {
 
 	config ConfigInterface
 
-	attestation bool
+	// if nil, the attestation check has not been completed yet.
+	attestation *bool
 
 	deviceNoiseStaticPubkey   []byte
 	channelHash               string
@@ -225,7 +226,7 @@ func (device *Device) inferVersionAndProduct() error {
 // - StatusPairingFailed (pairing rejected on the device)
 // - StatusUnpaired (in which the host needs to confirm the pairing with ChannelHashVerify(true))
 func (device *Device) Init() error {
-	device.attestation = false
+	device.attestation = nil
 	device.deviceNoiseStaticPubkey = nil
 	device.channelHash = ""
 	device.channelHashAppVerified = false
@@ -246,8 +247,9 @@ func (device *Device) Init() error {
 	if err != nil {
 		return err
 	}
-	device.attestation = attestation
+	device.attestation = &attestation
 	device.log.Info(fmt.Sprintf("attestation check result: %v", attestation))
+	device.fireEvent(EventAttestationCheckDone)
 
 	// Before 2.0.0, unlock was invoked automatically by the device before USB communication
 	// started.
