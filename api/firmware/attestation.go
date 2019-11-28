@@ -71,6 +71,10 @@ func (device *Device) performAttestation() (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	// See parsing below for what the sizes mean.
+	if len(response) < 1+32+64+64+32+64 {
+		return false, nil
+	}
 	if string(response[:1]) != responseSuccess {
 		return false, nil
 	}
