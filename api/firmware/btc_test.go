@@ -81,7 +81,7 @@ func TestBTCPub(t *testing.T) {
 
 		// Query error.
 		expectedErr := errors.New("error")
-		env.communication.query = func(msg []byte) ([]byte, error) {
+		env.communication.MockQuery = func(msg []byte) ([]byte, error) {
 			return nil, expectedErr
 		}
 		_, err = env.device.BTCPub(
