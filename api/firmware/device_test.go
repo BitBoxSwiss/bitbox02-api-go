@@ -23,67 +23,26 @@ import (
 	"github.com/digitalbitbox/bitbox02-api-go/api/common"
 	"github.com/digitalbitbox/bitbox02-api-go/api/firmware"
 	"github.com/digitalbitbox/bitbox02-api-go/api/firmware/messages"
+	"github.com/digitalbitbox/bitbox02-api-go/api/firmware/mocks"
 	"github.com/digitalbitbox/bitbox02-api-go/util/semver"
 	"github.com/flynn/noise"
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 )
 
-type communicationMock struct {
-	sendFrame func(msg string) error
-	query     func([]byte) ([]byte, error)
-	close     func()
-}
-
-func (communication *communicationMock) SendFrame(msg string) error {
-	return communication.sendFrame(msg)
-}
-
-func (communication *communicationMock) Query(msg []byte) ([]byte, error) {
-	return communication.query(msg)
-}
-
-func (communication *communicationMock) Close() {
-	communication.close()
-}
-
-type configMock struct{}
-
-func (config *configMock) ContainsDeviceStaticPubkey(pubkey []byte) bool {
-	return false
-}
-func (config *configMock) AddDeviceStaticPubkey(pubkey []byte) error {
-	return nil
-}
-func (config *configMock) GetAppNoiseStaticKeypair() *noise.DHKey {
-	return nil
-}
-func (config *configMock) SetAppNoiseStaticKeypair(key *noise.DHKey) error {
-	return nil
-}
-
-type loggerMock struct{}
-
-func (logger *loggerMock) Error(msg string, err error) {
-}
-func (logger *loggerMock) Info(msg string) {
-}
-func (logger *loggerMock) Debug(msg string) {
-}
-
 // newDevice creates a device to test with, with init/pairing already processed.
 func newDevice(
 	t *testing.T,
 	version *semver.SemVer,
 	product common.Product,
-	communication *communicationMock,
+	communication *mocks.Communication,
 	onRequest func(*messages.Request) *messages.Response,
 ) *firmware.Device {
 
 	device := firmware.NewDevice(
 		version,
 		&product,
-		&configMock{}, communication, &loggerMock{},
+		&mocks.Config{}, communication, &mocks.Logger{},
 	)
 
 	cipherSuite := noise.NewCipherSuite(noise.DH25519, noise.CipherChaChaPoly, noise.HashSHA256)
@@ -103,7 +62,7 @@ func newDevice(
 	shakingHands := false
 
 	var handleRequest func(request *messages.Request) *messages.Response
-	communication.query = func(msg []byte) ([]byte, error) {
+	communication.MockQuery = func(msg []byte) ([]byte, error) {
 		if shakingHands {
 			var err error
 			_, receiveCipher, sendCipher, err = handshake.ReadMessage(nil, msg)
@@ -187,7 +146,7 @@ func newDevice(
 			// Test upgrade.
 			// Expecting reboot command (with no response)
 			called := false
-			communication.sendFrame = func(msg string) error {
+			communication.MockSendFrame = func(msg string) error {
 				called = true
 				if version.AtLeast(semver.NewSemVer(4, 0, 0)) {
 					require.Equal(t, "n", msg[:1], version) // OP_NOISE
@@ -229,7 +188,7 @@ var responseSuccess = &messages.Response{
 type testEnv struct {
 	version       *semver.SemVer
 	product       common.Product
-	communication *communicationMock
+	communication *mocks.Communication
 	device        *firmware.Device
 	onRequest     func(*messages.Request) *messages.Response
 }
@@ -256,7 +215,7 @@ func testConfigurations(t *testing.T, run func(*testEnv, *testing.T)) {
 			var env testEnv
 			env.version = version
 			env.product = product
-			env.communication = &communicationMock{}
+			env.communication = &mocks.Communication{}
 
 			env.device = newDevice(
 				t,
@@ -292,7 +251,7 @@ func TestProduct(t *testing.T) {
 func TestClose(t *testing.T) {
 	testConfigurations(t, func(env *testEnv, t *testing.T) {
 		called := false
-		env.communication.close = func() { called = true }
+		env.communication.MockClose = func() { called = true }
 		env.device.Close()
 		require.True(t, called)
 	})
@@ -325,7 +284,7 @@ func TestRandom(t *testing.T) {
 
 		// Query error.
 		expectedErr := errors.New("error")
-		env.communication.query = func(msg []byte) ([]byte, error) {
+		env.communication.MockQuery = func(msg []byte) ([]byte, error) {
 			return nil, expectedErr
 		}
 		_, err = env.device.Random()
@@ -360,7 +319,7 @@ func TestSetDeviceName(t *testing.T) {
 
 		// Query error.
 		expectedErr := errors.New("error")
-		env.communication.query = func(msg []byte) ([]byte, error) {
+		env.communication.MockQuery = func(msg []byte) ([]byte, error) {
 			return nil, expectedErr
 		}
 		require.Equal(t, expectedErr, env.device.SetDeviceName(expected))
