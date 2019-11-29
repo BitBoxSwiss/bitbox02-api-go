@@ -30,15 +30,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type loggerMock struct{}
-
-func (logger *loggerMock) Error(msg string, err error) {
-}
-func (logger *loggerMock) Info(msg string) {
-}
-func (logger *loggerMock) Debug(msg string) {
-}
-
 // newDevice creates a device to test with, with init/pairing already processed.
 func newDevice(
 	t *testing.T,
@@ -51,7 +42,7 @@ func newDevice(
 	device := firmware.NewDevice(
 		version,
 		&product,
-		&mocks.Config{}, communication, &loggerMock{},
+		&mocks.Config{}, communication, &mocks.Logger{},
 	)
 
 	cipherSuite := noise.NewCipherSuite(noise.DH25519, noise.CipherChaChaPoly, noise.HashSHA256)

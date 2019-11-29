@@ -61,3 +61,18 @@ func (config *Config) GetAppNoiseStaticKeypair() *noise.DHKey {
 func (config *Config) SetAppNoiseStaticKeypair(key *noise.DHKey) error {
 	return nil
 }
+
+// Logger is a mock implementation of firmware.Logger.
+type Logger struct{}
+
+// Error implements firmware.Logger.
+func (logger *Logger) Error(msg string, err error) {
+}
+
+// Info implements firmware.Logger.
+func (logger *Logger) Info(msg string) {
+}
+
+// Debug implements firmware.Logger.
+func (logger *Logger) Debug(msg string) {
+}
