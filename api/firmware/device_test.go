@@ -30,21 +30,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type configMock struct{}
-
-func (config *configMock) ContainsDeviceStaticPubkey(pubkey []byte) bool {
-	return false
-}
-func (config *configMock) AddDeviceStaticPubkey(pubkey []byte) error {
-	return nil
-}
-func (config *configMock) GetAppNoiseStaticKeypair() *noise.DHKey {
-	return nil
-}
-func (config *configMock) SetAppNoiseStaticKeypair(key *noise.DHKey) error {
-	return nil
-}
-
 type loggerMock struct{}
 
 func (logger *loggerMock) Error(msg string, err error) {
@@ -66,7 +51,7 @@ func newDevice(
 	device := firmware.NewDevice(
 		version,
 		&product,
-		&configMock{}, communication, &loggerMock{},
+		&mocks.Config{}, communication, &loggerMock{},
 	)
 
 	cipherSuite := noise.NewCipherSuite(noise.DH25519, noise.CipherChaChaPoly, noise.HashSHA256)

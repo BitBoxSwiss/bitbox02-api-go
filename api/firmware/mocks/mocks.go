@@ -15,6 +15,8 @@
 // Package mocks contains the mock implementations to be used in testing.
 package mocks
 
+import "github.com/flynn/noise"
+
 // Communication is a mock implementation of firmware.Communication.
 type Communication struct {
 	MockSendFrame func(msg string) error
@@ -35,4 +37,27 @@ func (communication *Communication) Query(msg []byte) ([]byte, error) {
 // Close implements firmware.Close.
 func (communication *Communication) Close() {
 	communication.MockClose()
+}
+
+// Config is a mock implementation of firmware.ConfigInterface.
+type Config struct{}
+
+// ContainsDeviceStaticPubkey implements firmware.Communication.
+func (config *Config) ContainsDeviceStaticPubkey(pubkey []byte) bool {
+	return false
+}
+
+// AddDeviceStaticPubkey implements firmware.Communication.
+func (config *Config) AddDeviceStaticPubkey(pubkey []byte) error {
+	return nil
+}
+
+// GetAppNoiseStaticKeypair implements firmware.Communication.
+func (config *Config) GetAppNoiseStaticKeypair() *noise.DHKey {
+	return nil
+}
+
+// SetAppNoiseStaticKeypair implements firmware.Communication.
+func (config *Config) SetAppNoiseStaticKeypair(key *noise.DHKey) error {
+	return nil
 }
