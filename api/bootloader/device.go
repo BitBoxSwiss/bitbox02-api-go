@@ -255,6 +255,17 @@ func (device *Device) parseSignedFirmware(firmware []byte) ([]byte, []byte, erro
 	return sigData, firmware, nil
 }
 
+// SignedFirmwareVersion returns the monotonic firmware version contained in the signed firmware
+// format.
+func (device *Device) SignedFirmwareVersion(firmware []byte) (uint32, error) {
+	sigData, _, err := device.parseSignedFirmware(firmware)
+	if err != nil {
+		return 0, err
+	}
+	return binary.LittleEndian.Uint32(sigData[signingPubkeysDataLen:][:4]), nil
+
+}
+
 func (device *Device) flashSignedFirmware(firmware []byte, progressCallback func(float64)) error {
 	sigData, firmware, err := device.parseSignedFirmware(firmware)
 	if err != nil {

@@ -179,6 +179,29 @@ func TestGetHashes(t *testing.T) {
 	})
 }
 
+// TestSignedFirmwareVersion tests device.SignedFirmwareVersion.
+func TestSignedFirmwareVersion(t *testing.T) {
+	signedFirmware, err := ioutil.ReadFile("testdata/firmware-btc.v4.2.2.signed.bin")
+	if err != nil {
+		panic(err)
+	}
+
+	testConfigurations(t, func(env *testEnv, t *testing.T) {
+		if env.product != common.ProductBitBox02BTCOnly {
+			return
+		}
+
+		// Invalid firmware.
+		_, err := env.device.SignedFirmwareVersion(nil)
+		require.Error(t, err)
+
+		// Valid firmware.
+		version, err := env.device.SignedFirmwareVersion(signedFirmware)
+		require.NoError(t, err)
+		require.Equal(t, uint32(7), version)
+	})
+}
+
 // TestUpgradeFirmware tests a successful firmware upgrade with a real-world signed firmware
 // fixture.
 func TestUpgradeFirmware(t *testing.T) {
