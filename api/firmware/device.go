@@ -38,7 +38,6 @@ var (
 
 // Communication contains functions needed to communicate with the device.
 type Communication interface {
-	SendFrame(string) error
 	Query([]byte) ([]byte, error)
 	Close()
 }

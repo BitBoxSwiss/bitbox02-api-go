@@ -19,14 +19,8 @@ import "github.com/flynn/noise"
 
 // Communication is a mock implementation of firmware.Communication.
 type Communication struct {
-	MockSendFrame func(msg string) error
-	MockQuery     func([]byte) ([]byte, error)
-	MockClose     func()
-}
-
-// SendFrame implements firmware.Communication.
-func (communication *Communication) SendFrame(msg string) error {
-	return communication.MockSendFrame(msg)
+	MockQuery func([]byte) ([]byte, error)
+	MockClose func()
 }
 
 // Query implements firmware.Query.
