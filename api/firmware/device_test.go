@@ -146,14 +146,14 @@ func newDevice(
 			// Test upgrade.
 			// Expecting reboot command (with no response)
 			called := false
-			communication.MockSendFrame = func(msg string) error {
+			communication.MockQuery = func(msg []byte) ([]byte, error) {
 				called = true
 				if version.AtLeast(semver.NewSemVer(4, 0, 0)) {
-					require.Equal(t, "n", msg[:1], version) // OP_NOISE
+					require.Equal(t, "n", string(msg[:1]), version) // OP_NOISE
 					msg = msg[1:]
 				}
 
-				decrypted, err := receiveCipher.Decrypt(nil, nil, []byte(msg))
+				decrypted, err := receiveCipher.Decrypt(nil, nil, msg)
 				require.NoError(t, err)
 
 				request := &messages.Request{}
@@ -162,7 +162,7 @@ func newDevice(
 				require.NotNil(t, request)
 				_, ok := request.Request.(*messages.Request_Reboot)
 				require.True(t, ok)
-				return nil
+				return msg[:1], nil
 			}
 
 			// Actually, before v4.0.0 there was no opNoise, so the encrypted reboot command could
