@@ -33,13 +33,16 @@ message BTCScriptConfig {
 
   message Multisig {
     uint32 threshold = 1;
+    // xpubs are acount-level xpubs. Addresses are going to be derived from it using: m/<change>/<receive>.
+    // The number of xpubs defines the number of cosigners.
     repeated XPub xpubs = 2;
+    // Index to the xpub of our keystore in xpubs. The keypath to it is provided via
+    // BTCPubRequest/BTCSignInit.
+    uint32 our_xpub_index = 3;
   }
-
 
   oneof config {
     SimpleType simple_type = 1;
-    Multisig multisig_p2wsh = 2;
   }
 }
 
@@ -48,9 +51,11 @@ message BTCPubRequest {
     TPUB = 0;
     XPUB = 1;
     YPUB = 2;
-    ZPUB = 3;
-    VPUB = 4;
+    ZPUB = 3; // zpub
+    VPUB = 4; // vpub
     UPUB = 5;
+    CAPITAL_VPUB = 6; // Vpub
+    CAPITAL_ZPUB = 7; // Zpub
   }
 
   BTCCoin coin = 1;
@@ -68,12 +73,11 @@ message BTCPubRequest {
 message BTCSignInitRequest {
   BTCCoin coin = 1;
   BTCScriptConfig script_config = 2; // script config for inputs and changes
-  uint32 bip44_account = 3;
+  repeated uint32 keypath_account = 3; // prefix to all input and change keypaths.
   uint32 version = 4; // must be 1 or 2
   uint32 num_inputs = 5;
   uint32 num_outputs = 6;
   uint32 locktime = 7; // must be <500000000
-  repeated uint32 keypath_account = 8; // prefix to all input and change keypaths.
 }
 
 message BTCSignNextResponse {
