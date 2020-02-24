@@ -64,6 +64,12 @@ func newDevice(
 	var handleRequest func(request *messages.Request) *messages.Response
 	communication.MockQuery = func(msg []byte) ([]byte, error) {
 		if shakingHands {
+			if version.AtLeast(semver.NewSemVer(7, 0, 0)) {
+				// 'H' = OP_HER_COMEZ_TEH_HANDSHAEK
+				require.Equal(t, byte('H'), msg[0])
+				msg = msg[1:]
+			}
+
 			var err error
 			_, receiveCipher, sendCipher, err = handshake.ReadMessage(nil, msg)
 			require.NoError(t, err)
@@ -74,6 +80,10 @@ func newDevice(
 			}
 			msgSend, _, _, err := handshake.WriteMessage(nil, nil)
 			require.NoError(t, err)
+			if version.AtLeast(semver.NewSemVer(7, 0, 0)) {
+				// prepend OP_STATUS_SUCCESS
+				msgSend = append([]byte{0x00}, msgSend...)
+			}
 			return msgSend, nil
 		}
 
@@ -89,7 +99,12 @@ func newDevice(
 
 			responseBytes, err := proto.Marshal(response)
 			require.NoError(t, err)
-			return sendCipher.Encrypt(nil, nil, responseBytes), nil
+			encrypted := sendCipher.Encrypt(nil, nil, responseBytes)
+			if version.AtLeast(semver.NewSemVer(7, 0, 0)) {
+				// prepend OP_STATUS_SUCCESS
+				encrypted = append([]byte{0x00}, encrypted...)
+			}
+			return encrypted, nil
 		}
 
 		switch msg[0] {
@@ -203,6 +218,9 @@ func testConfigurations(t *testing.T, run func(*testEnv, *testing.T)) {
 		semver.NewSemVer(4, 2, 0),
 		semver.NewSemVer(4, 2, 1),
 		semver.NewSemVer(4, 3, 0),
+		semver.NewSemVer(5, 0, 0),
+		semver.NewSemVer(6, 0, 0),
+		semver.NewSemVer(7, 0, 0),
 		firmware.TstLowestNonSupportedFirmwareVersion,
 	}
 	products := []common.Product{
