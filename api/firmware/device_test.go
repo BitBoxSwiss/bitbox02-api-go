@@ -87,7 +87,7 @@ func newDevice(
 			return msgSend, nil
 		}
 
-		handleProtobufMsg := func(msg []byte) ([]byte, error) {
+		handleProtobufMsg := func(msg []byte) []byte {
 			decrypted, err := receiveCipher.Decrypt(nil, nil, msg)
 			require.NoError(t, err)
 
@@ -104,7 +104,7 @@ func newDevice(
 				// prepend OP_STATUS_SUCCESS
 				encrypted = append([]byte{0x00}, encrypted...)
 			}
-			return encrypted, nil
+			return encrypted
 		}
 
 		switch msg[0] {
@@ -128,9 +128,28 @@ func newDevice(
 			if !version.AtLeast(semver.NewSemVer(4, 0, 0)) {
 				break
 			}
-			return handleProtobufMsg(msg[1:])
+			return handleProtobufMsg(msg[1:]), nil
 		}
-		return handleProtobufMsg(msg)
+		return handleProtobufMsg(msg), nil
+	}
+
+	if version.AtLeast(semver.NewSemVer(7, 0, 0)) {
+		query := communication.MockQuery
+		communication.MockQuery = func(msg []byte) ([]byte, error) {
+			// TODO: modularize and unit test the full hww* arbitration / cancelling.
+			// 0x00 = HWW_REQ_NEW
+			require.Equal(t, byte(0x00), msg[0])
+			msg = msg[1:]
+
+			response, err := query(msg)
+			if err != nil {
+				return nil, err
+			}
+
+			// prepend HWW_RSP_ACK
+			response = append([]byte{0x00}, response...)
+			return response, nil
+		}
 	}
 	require.NoError(t, device.Init())
 	if version.AtLeast(firmware.TstLowestNonSupportedFirmwareVersion) {

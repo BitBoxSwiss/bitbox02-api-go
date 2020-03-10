@@ -93,6 +93,7 @@ linters:
     - wsl
     - interfacer
     - misspell
+    - gocognit
   disable-all: false
 
 issues:
