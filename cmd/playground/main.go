@@ -69,7 +69,6 @@ func main() {
 	device.Init()
 	device.ChannelHashVerify(true)
 	const HARDENED = 0x80000000
-
 	keypathAccount := []uint32{48 + HARDENED, 0 + HARDENED, 0 + HARDENED, 2 + HARDENED}
 	coin := messages.BTCCoin_BTC
 	ourXPub, err := device.BTCXPub(
