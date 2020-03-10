@@ -26,6 +26,19 @@ import (
 
 const hardenedKeyStart = 0x80000000
 
+func TestNewXPub(t *testing.T) {
+	xpub, err := firmware.NewXPub(
+		"xpub6FEZ9Bv73h1vnE4TJG4QFj2RPXJhhsPbnXgFyH3ErLvpcZrDcynY65bhWga8PazWHLSLi23PoBhGcLcYW6JRiJ12zXZ9Aop4LbAqsS3gtcy")
+	require.NoError(t, err)
+	require.Equal(t, &messages.XPub{
+		Depth:             []byte("\x04"),
+		ParentFingerprint: []byte("\xe7\x67\xd2\xc3"),
+		ChildNum:          hardenedKeyStart + 2,
+		ChainCode:         []byte("\xda\x35\xa6\x5b\xdf\x92\x8b\x8b\xd7\x6f\xd4\xb3\xe2\x5c\xd6\x36\xda\x4f\xfe\x90\x54\x8d\x61\x7d\x18\x34\x65\xac\xb6\x5a\xa6\xad"),
+		PublicKey:         []byte("\x03\x8e\xcd\x65\x6c\x32\xad\xc6\x42\xa6\xd3\x2f\x88\x4a\xe3\xa0\x4c\xd3\x8b\xbf\x2d\x42\xaf\xff\x76\xb7\x7a\xde\xc4\x64\x3b\x0e\x1c"),
+	}, xpub)
+}
+
 func TestBTCXPub(t *testing.T) {
 	testConfigurations(t, func(env *testEnv, t *testing.T) {
 		expected := "mocked-xpub"
