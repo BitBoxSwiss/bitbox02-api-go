@@ -62,7 +62,30 @@ func newDevice(
 	shakingHands := false
 
 	var handleRequest func(request *messages.Request) *messages.Response
-	communication.MockQuery = func(msg []byte) ([]byte, error) {
+
+	// upgrades query with HWW_* framing for >=v7.0.0 versions
+	v7_0_0Query := func(query func(msg []byte) ([]byte, error)) func(msg []byte) ([]byte, error) {
+		if !version.AtLeast(semver.NewSemVer(7, 0, 0)) {
+			return query
+		}
+		return func(msg []byte) ([]byte, error) {
+			// TODO: modularize and unit test the full hww* arbitration / cancelling.
+			// 0x00 = HWW_REQ_NEW
+			require.Equal(t, byte(0x00), msg[0])
+			msg = msg[1:]
+
+			response, err := query(msg)
+			if err != nil {
+				return nil, err
+			}
+
+			// prepend HWW_RSP_ACK
+			response = append([]byte{0x00}, response...)
+			return response, nil
+		}
+	}
+
+	communication.MockQuery = v7_0_0Query(func(msg []byte) ([]byte, error) {
 		if shakingHands {
 			if version.AtLeast(semver.NewSemVer(7, 0, 0)) {
 				// 'H' = OP_HER_COMEZ_TEH_HANDSHAEK
@@ -131,26 +154,8 @@ func newDevice(
 			return handleProtobufMsg(msg[1:]), nil
 		}
 		return handleProtobufMsg(msg), nil
-	}
+	})
 
-	if version.AtLeast(semver.NewSemVer(7, 0, 0)) {
-		query := communication.MockQuery
-		communication.MockQuery = func(msg []byte) ([]byte, error) {
-			// TODO: modularize and unit test the full hww* arbitration / cancelling.
-			// 0x00 = HWW_REQ_NEW
-			require.Equal(t, byte(0x00), msg[0])
-			msg = msg[1:]
-
-			response, err := query(msg)
-			if err != nil {
-				return nil, err
-			}
-
-			// prepend HWW_RSP_ACK
-			response = append([]byte{0x00}, response...)
-			return response, nil
-		}
-	}
 	require.NoError(t, device.Init())
 	if version.AtLeast(firmware.TstLowestNonSupportedFirmwareVersion) {
 		require.Equal(t, firmware.StatusRequireAppUpgrade, device.Status())
@@ -180,7 +185,7 @@ func newDevice(
 			// Test upgrade.
 			// Expecting reboot command (with no response)
 			called := false
-			communication.MockQuery = func(msg []byte) ([]byte, error) {
+			communication.MockQuery = v7_0_0Query(func(msg []byte) ([]byte, error) {
 				called = true
 				if version.AtLeast(semver.NewSemVer(4, 0, 0)) {
 					require.Equal(t, "n", string(msg[:1]), version) // OP_NOISE
@@ -197,7 +202,7 @@ func newDevice(
 				_, ok := request.Request.(*messages.Request_Reboot)
 				require.True(t, ok)
 				return msg[:1], nil
-			}
+			})
 
 			// Actually, before v4.0.0 there was no opNoise, so the encrypted reboot command could
 			// by chance start with opUnlock or opAttestation, in which case those api endpoints
@@ -240,6 +245,7 @@ func testConfigurations(t *testing.T, run func(*testEnv, *testing.T)) {
 		semver.NewSemVer(5, 0, 0),
 		semver.NewSemVer(6, 0, 0),
 		semver.NewSemVer(7, 0, 0),
+		semver.NewSemVer(8, 0, 0),
 		firmware.TstLowestNonSupportedFirmwareVersion,
 	}
 	products := []common.Product{
