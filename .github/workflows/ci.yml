@@ -1,0 +1,79 @@
+# See reference docs at
+# https://help.github.com/en/actions/reference/workflow-syntax-for-github-actions
+name: ci
+on: [push, pull_request]
+env:
+  GO_VERSION: "^1.16"
+  GOLANGCI_LINT_VERSION: "v1.27.0"
+
+jobs:
+  lint:
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Clone the repo
+        uses: actions/checkout@v2
+      - name: Enable caching
+        uses: actions/cache@v2
+        with:
+          # Increment cache number to invalidate.
+          key: ${{runner.os}}-cache-1
+          path: |
+            ~/go/pkg
+            ~/.cache/go-build
+            ~/.cache/golangci-lint
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{env.GO_VERSION}}
+      # Keep the linter version and its config in .golangci.yml in sync with the app repo at
+      # https://github.com/digitalbitbox/bitbox-wallet-app/blob/e319d37/Makefile#L24-L25.
+      - name: Install golangci-lint
+        run: |
+          curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
+          sh -s -- -b $HOME $GOLANGCI_LINT_VERSION
+      - name: Lint
+        run: ~/golangci-lint run --skip-dirs=cmd/playground
+  test:
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Clone the repo
+        uses: actions/checkout@v2
+      - name: Enable caching
+        uses: actions/cache@v2
+        with:
+          # Increment cache number to invalidate.
+          key: ${{runner.os}}-cache-1
+          path: |
+            ~/go/pkg
+            ~/.cache/go-build
+            ~/.cache/golangci-lint
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{env.GO_VERSION}}
+      - name: Test
+        run: |
+          go version
+          go test ./...
+  build:
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Clone the repo
+        uses: actions/checkout@v2
+      - name: Enable caching
+        uses: actions/cache@v2
+        with:
+          # Increment cache number to invalidate.
+          key: ${{runner.os}}-cache-1
+          path: |
+            ~/go/pkg
+            ~/.cache/go-build
+            ~/.cache/golangci-lint
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{env.GO_VERSION}}
+      - name: Build
+        run: |
+          go version
+          go build ./...
