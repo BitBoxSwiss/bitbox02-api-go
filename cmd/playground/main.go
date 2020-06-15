@@ -1,4 +1,5 @@
 // Copyright 2018-2019 Shift Cryptosecurity AG
+// Copyright 2020 Shift Crypto AG
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -150,8 +151,12 @@ func signFromTxID(device *firmware.Device, txID string) {
 	}
 	_, err := device.BTCSign(
 		messages.BTCCoin_TBTC,
-		firmware.NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH),
-		[]uint32{84 + HARDENED, 1 + HARDENED, 0 + HARDENED},
+		[]*messages.BTCScriptConfigWithKeypath{
+			{
+				ScriptConfig: firmware.NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH),
+				Keypath:      []uint32{84 + HARDENED, 1 + HARDENED, 0 + HARDENED},
+			},
+		},
 		&firmware.BTCTx{
 			Version:  tx.Transaction.Version,
 			Inputs:   inputs,
