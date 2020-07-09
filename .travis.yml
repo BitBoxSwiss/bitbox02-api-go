@@ -9,7 +9,9 @@ os:
   - linux
 
 language: go
-go: 1.13.x
+go:
+  - 1.12.x # need this due to GopherJS being stuck on go1.12
+  - 1.14.x
 
 addons:
   apt:
