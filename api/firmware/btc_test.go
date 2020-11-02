@@ -20,6 +20,7 @@ import (
 
 	"github.com/digitalbitbox/bitbox02-api-go/api/firmware"
 	"github.com/digitalbitbox/bitbox02-api-go/api/firmware/messages"
+	"github.com/digitalbitbox/bitbox02-api-go/util/semver"
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 )
@@ -176,5 +177,39 @@ func TestBTCAddress(t *testing.T) {
 			expectedPubRequest.Display,
 		)
 		require.Equal(t, expectedErr, err)
+	})
+}
+
+func TestBTCSignMessage(t *testing.T) {
+	testConfigurations(t, func(env *testEnv, t *testing.T) {
+		env.onRequest = func(request *messages.Request) *messages.Response {
+			return &messages.Response{
+				Response: &messages.Response_Btc{
+					Btc: &messages.BTCResponse{
+						Response: &messages.BTCResponse_SignMessage{
+							SignMessage: &messages.BTCSignMessageResponse{
+								Signature: []byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\x02"),
+							},
+						},
+					},
+				},
+			}
+		}
+		sig, recID, electrumSig65, err := env.device.BTCSignMessage(
+			messages.BTCCoin_BTC,
+			&messages.BTCScriptConfigWithKeypath{
+				ScriptConfig: firmware.NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH_P2SH),
+				Keypath:      []uint32{49 + hardenedKeyStart, 0 + hardenedKeyStart, 0 + hardenedKeyStart, 0, 0},
+			},
+			[]byte("message"),
+		)
+		if env.version.AtLeast(semver.NewSemVer(9, 2, 0)) {
+			require.NoError(t, err)
+			require.Equal(t, []byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), sig)
+			require.Equal(t, byte(2), recID)
+			require.Equal(t, electrumSig65, []byte("\x21aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+		} else {
+			require.EqualError(t, err, firmware.UnsupportedError("9.2.0").Error())
+		}
 	})
 }

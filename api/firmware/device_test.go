@@ -246,6 +246,8 @@ func testConfigurations(t *testing.T, run func(*testEnv, *testing.T)) {
 		semver.NewSemVer(6, 0, 0),
 		semver.NewSemVer(7, 0, 0),
 		semver.NewSemVer(8, 0, 0),
+		semver.NewSemVer(9, 1, 0),
+		semver.NewSemVer(9, 2, 0),
 		firmware.TstLowestNonSupportedFirmwareVersion,
 	}
 	products := []common.Product{
