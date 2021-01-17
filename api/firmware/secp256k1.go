@@ -16,8 +16,6 @@ package firmware
 
 import (
 	"crypto/sha256"
-	"encoding/hex"
-	"fmt"
 	"math/big"
 
 	"github.com/btcsuite/btcd/btcec"
@@ -42,10 +40,6 @@ func antikleptoHostCommit(hostNonce []byte) []byte {
 // k'*G = signerCommitment + H(signerCommitment, hostNonce)*G.
 func antikleptoVerify(hostNonce, signerCommitment, signature []byte) error {
 	signerCommitmentPubkey, err := btcec.ParsePubKey(signerCommitment, btcec.S256())
-	fmt.Println("LOL===")
-	fmt.Println(hex.EncodeToString(hostNonce))
-	fmt.Println(hex.EncodeToString(signerCommitment))
-	fmt.Println(hex.EncodeToString(signature))
 	if err != nil {
 		return errp.WithStack(err)
 	}
