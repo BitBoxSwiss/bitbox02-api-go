@@ -222,7 +222,7 @@ func newDevice(
 	return device
 }
 
-var responseSuccessMessage = &messages.Response{
+var testDeviceResponseOK = &messages.Response{
 	Response: &messages.Response_Success{
 		Success: &messages.Success{},
 	},
@@ -252,6 +252,8 @@ func testConfigurations(t *testing.T, run func(*testEnv, *testing.T)) {
 		semver.NewSemVer(8, 0, 0),
 		semver.NewSemVer(9, 1, 0),
 		semver.NewSemVer(9, 2, 0),
+		semver.NewSemVer(9, 4, 0),
+		semver.NewSemVer(9, 5, 0),
 		lowestNonSupportedFirmwareVersion,
 	}
 	products := []common.Product{
@@ -326,7 +328,7 @@ func TestRandom(t *testing.T) {
 
 		// Wrong response.
 		env.onRequest = func(request *messages.Request) *messages.Response {
-			return responseSuccessMessage
+			return testDeviceResponseOK
 		}
 		_, err = env.device.Random()
 		require.Error(t, err)
@@ -352,7 +354,7 @@ func TestSetDeviceName(t *testing.T) {
 			setDeviceName, ok := request.Request.(*messages.Request_DeviceName)
 			require.True(t, ok)
 			require.Equal(t, expected, setDeviceName.DeviceName.Name)
-			return responseSuccessMessage
+			return testDeviceResponseOK
 		}
 		require.NoError(t, env.device.SetDeviceName(expected))
 
