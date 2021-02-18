@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package firmware_test
+package firmware
 
 import (
 	"errors"
 	"testing"
 
-	"github.com/digitalbitbox/bitbox02-api-go/api/firmware"
 	"github.com/digitalbitbox/bitbox02-api-go/api/firmware/messages"
 	"github.com/digitalbitbox/bitbox02-api-go/util/semver"
 	"github.com/golang/protobuf/proto"
@@ -28,7 +27,7 @@ import (
 const hardenedKeyStart = 0x80000000
 
 func TestNewXPub(t *testing.T) {
-	xpub, err := firmware.NewXPub(
+	xpub, err := NewXPub(
 		"xpub6FEZ9Bv73h1vnE4TJG4QFj2RPXJhhsPbnXgFyH3ErLvpcZrDcynY65bhWga8PazWHLSLi23PoBhGcLcYW6JRiJ12zXZ9Aop4LbAqsS3gtcy")
 	require.NoError(t, err)
 	require.Equal(t, &messages.XPub{
@@ -61,7 +60,7 @@ func TestBTCXPub(t *testing.T) {
 
 		// Unexpected response
 		env.onRequest = func(request *messages.Request) *messages.Response {
-			return responseSuccess
+			return responseSuccessMessage
 		}
 		_, err := env.device.BTCXPub(
 			expectedPubRequest.Coin,
@@ -113,7 +112,7 @@ func TestBTCXPub(t *testing.T) {
 func TestBTCAddress(t *testing.T) {
 	testConfigurations(t, func(env *testEnv, t *testing.T) {
 		expected := "mocked-address"
-		scriptConfig := firmware.NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH_P2SH)
+		scriptConfig := NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH_P2SH)
 		expectedPubRequest := &messages.BTCPubRequest{
 			Coin: messages.BTCCoin_TBTC,
 			Keypath: []uint32{
@@ -131,7 +130,7 @@ func TestBTCAddress(t *testing.T) {
 
 		// Unexpected response
 		env.onRequest = func(request *messages.Request) *messages.Response {
-			return responseSuccess
+			return responseSuccessMessage
 		}
 		_, err := env.device.BTCAddress(
 			expectedPubRequest.Coin,
@@ -198,7 +197,7 @@ func TestBTCSignMessage(t *testing.T) {
 		sig, recID, electrumSig65, err := env.device.BTCSignMessage(
 			messages.BTCCoin_BTC,
 			&messages.BTCScriptConfigWithKeypath{
-				ScriptConfig: firmware.NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH_P2SH),
+				ScriptConfig: NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH_P2SH),
 				Keypath:      []uint32{49 + hardenedKeyStart, 0 + hardenedKeyStart, 0 + hardenedKeyStart, 0, 0},
 			},
 			[]byte("message"),
@@ -209,7 +208,7 @@ func TestBTCSignMessage(t *testing.T) {
 			require.Equal(t, byte(2), recID)
 			require.Equal(t, electrumSig65, []byte("\x21aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
 		} else {
-			require.EqualError(t, err, firmware.UnsupportedError("9.2.0").Error())
+			require.EqualError(t, err, UnsupportedError("9.2.0").Error())
 		}
 	})
 }
