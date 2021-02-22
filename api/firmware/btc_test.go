@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package firmware_test
+package firmware
 
 import (
 	"errors"
 	"testing"
 
-	"github.com/digitalbitbox/bitbox02-api-go/api/firmware"
 	"github.com/digitalbitbox/bitbox02-api-go/api/firmware/messages"
 	"github.com/digitalbitbox/bitbox02-api-go/util/semver"
 	"github.com/golang/protobuf/proto"
@@ -28,7 +27,7 @@ import (
 const hardenedKeyStart = 0x80000000
 
 func TestNewXPub(t *testing.T) {
-	xpub, err := firmware.NewXPub(
+	xpub, err := NewXPub(
 		"xpub6FEZ9Bv73h1vnE4TJG4QFj2RPXJhhsPbnXgFyH3ErLvpcZrDcynY65bhWga8PazWHLSLi23PoBhGcLcYW6JRiJ12zXZ9Aop4LbAqsS3gtcy")
 	require.NoError(t, err)
 	require.Equal(t, &messages.XPub{
@@ -61,7 +60,7 @@ func TestBTCXPub(t *testing.T) {
 
 		// Unexpected response
 		env.onRequest = func(request *messages.Request) *messages.Response {
-			return responseSuccess
+			return testDeviceResponseOK
 		}
 		_, err := env.device.BTCXPub(
 			expectedPubRequest.Coin,
@@ -113,7 +112,7 @@ func TestBTCXPub(t *testing.T) {
 func TestBTCAddress(t *testing.T) {
 	testConfigurations(t, func(env *testEnv, t *testing.T) {
 		expected := "mocked-address"
-		scriptConfig := firmware.NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH_P2SH)
+		scriptConfig := NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH_P2SH)
 		expectedPubRequest := &messages.BTCPubRequest{
 			Coin: messages.BTCCoin_TBTC,
 			Keypath: []uint32{
@@ -131,7 +130,7 @@ func TestBTCAddress(t *testing.T) {
 
 		// Unexpected response
 		env.onRequest = func(request *messages.Request) *messages.Response {
-			return responseSuccess
+			return testDeviceResponseOK
 		}
 		_, err := env.device.BTCAddress(
 			expectedPubRequest.Coin,
@@ -182,34 +181,53 @@ func TestBTCAddress(t *testing.T) {
 
 func TestBTCSignMessage(t *testing.T) {
 	testConfigurations(t, func(env *testEnv, t *testing.T) {
+		hostNonce := []byte("\x55\xae\x3b\xbb\x4c\x9e\xc5\x27\xca\xc1\x48\x92\xe9\xd7\x29\x81\x82\xf2\x1d\x5c\xa0\xa5\xf3\xc4\x30\x42\x3e\x52\xfe\x1c\xb9\x10")
+		expectedSig := []byte("\xb1\xf8\x62\x29\x55\xc2\x67\xf9\x01\x0b\xd9\x1d\xa8\x46\x93\x67\xb5\xd1\xab\xd1\x95\x72\x1c\xa8\xc1\xd0\xc5\x2a\x37\x73\x84\xbb\x44\xa9\x92\x7e\x42\xaf\xf8\x91\xfa\x8b\xd1\x9e\x77\x86\x62\x1e\x57\xfb\xe4\x14\x79\x9d\x71\x29\x25\xed\xbc\x3b\x5b\x68\xc8\x95\x00")
 		env.onRequest = func(request *messages.Request) *messages.Response {
+			if req, ok := request.Request.(*messages.Request_Btc).Btc.Request.(*messages.BTCRequest_SignMessage); ok && req.SignMessage.HostNonceCommitment != nil {
+				return &messages.Response{
+					Response: &messages.Response_Btc{
+						Btc: &messages.BTCResponse{
+							Response: &messages.BTCResponse_AntikleptoSignerCommitment{
+								AntikleptoSignerCommitment: &messages.AntiKleptoSignerCommitment{
+									Commitment: []byte("\x02\xed\xee\x9d\x17\x5a\xd5\xcf\x66\xf5\x46\xe0\x72\xfe\x08\x7f\xc1\x5c\x5c\xa8\x4e\x51\xbe\x6e\x72\x5f\x5b\x33\x77\xbf\xfc\x96\x22"),
+								},
+							},
+						},
+					},
+				}
+			}
 			return &messages.Response{
 				Response: &messages.Response_Btc{
 					Btc: &messages.BTCResponse{
 						Response: &messages.BTCResponse_SignMessage{
 							SignMessage: &messages.BTCSignMessageResponse{
-								Signature: []byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\x02"),
+								Signature: expectedSig,
 							},
 						},
 					},
 				},
 			}
 		}
+		// Mock host nonce.
+		generateHostNonce = func() ([]byte, error) {
+			return hostNonce, nil
+		}
 		sig, recID, electrumSig65, err := env.device.BTCSignMessage(
 			messages.BTCCoin_BTC,
 			&messages.BTCScriptConfigWithKeypath{
-				ScriptConfig: firmware.NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH_P2SH),
+				ScriptConfig: NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH_P2SH),
 				Keypath:      []uint32{49 + hardenedKeyStart, 0 + hardenedKeyStart, 0 + hardenedKeyStart, 0, 0},
 			},
 			[]byte("message"),
 		)
 		if env.version.AtLeast(semver.NewSemVer(9, 2, 0)) {
 			require.NoError(t, err)
-			require.Equal(t, []byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), sig)
-			require.Equal(t, byte(2), recID)
-			require.Equal(t, electrumSig65, []byte("\x21aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+			require.Equal(t, expectedSig[:64], sig)
+			require.Equal(t, byte(0), recID)
+			require.Equal(t, electrumSig65, append([]byte{31}, expectedSig[:64]...))
 		} else {
-			require.EqualError(t, err, firmware.UnsupportedError("9.2.0").Error())
+			require.EqualError(t, err, UnsupportedError("9.2.0").Error())
 		}
 	})
 }

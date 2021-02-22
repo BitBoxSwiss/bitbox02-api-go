@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package firmware_test
+package firmware
 
 import (
 	"crypto/rand"
@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/digitalbitbox/bitbox02-api-go/api/common"
-	"github.com/digitalbitbox/bitbox02-api-go/api/firmware"
 	"github.com/digitalbitbox/bitbox02-api-go/api/firmware/messages"
 	"github.com/digitalbitbox/bitbox02-api-go/api/firmware/mocks"
 	"github.com/digitalbitbox/bitbox02-api-go/util/semver"
@@ -37,9 +36,9 @@ func newDevice(
 	product common.Product,
 	communication *mocks.Communication,
 	onRequest func(*messages.Request) *messages.Response,
-) *firmware.Device {
+) *Device {
 
-	device := firmware.NewDevice(
+	device := NewDevice(
 		version,
 		&product,
 		&mocks.Config{}, communication, &mocks.Logger{},
@@ -157,8 +156,8 @@ func newDevice(
 	})
 
 	require.NoError(t, device.Init())
-	if version.AtLeast(firmware.TstLowestNonSupportedFirmwareVersion) {
-		require.Equal(t, firmware.StatusRequireAppUpgrade, device.Status())
+	if version.AtLeast(lowestNonSupportedFirmwareVersion) {
+		require.Equal(t, StatusRequireAppUpgrade, device.Status())
 		return nil
 	}
 
@@ -177,10 +176,15 @@ func newDevice(
 	device.ChannelHashVerify(true)
 
 	{ // Test upgrade required and actual upgrade, which for the firmware only means to reboot into the bootloader.
-		lowestSupportedFirmwareVersion, ok := firmware.TstLowestSupportedFirmwareVersions[product]
+		lowestSupported := map[common.Product]*semver.SemVer{
+			common.ProductBitBox02Multi:      lowestSupportedFirmwareVersion,
+			common.ProductBitBox02BTCOnly:    lowestSupportedFirmwareVersionBTCOnly,
+			common.ProductBitBoxBaseStandard: lowestSupportedFirmwareVersionBitBoxBaseStandard,
+		}
+		lowestSupportedFirmwareVersion, ok := lowestSupported[product]
 		require.True(t, ok)
 		if !version.AtLeast(lowestSupportedFirmwareVersion) {
-			require.Equal(t, firmware.StatusRequireFirmwareUpgrade, device.Status())
+			require.Equal(t, StatusRequireFirmwareUpgrade, device.Status())
 
 			// Test upgrade.
 			// Expecting reboot command (with no response)
@@ -218,7 +222,7 @@ func newDevice(
 	return device
 }
 
-var responseSuccess = &messages.Response{
+var testDeviceResponseOK = &messages.Response{
 	Response: &messages.Response_Success{
 		Success: &messages.Success{},
 	},
@@ -228,7 +232,7 @@ type testEnv struct {
 	version       *semver.SemVer
 	product       common.Product
 	communication *mocks.Communication
-	device        *firmware.Device
+	device        *Device
 	onRequest     func(*messages.Request) *messages.Response
 }
 
@@ -248,7 +252,9 @@ func testConfigurations(t *testing.T, run func(*testEnv, *testing.T)) {
 		semver.NewSemVer(8, 0, 0),
 		semver.NewSemVer(9, 1, 0),
 		semver.NewSemVer(9, 2, 0),
-		firmware.TstLowestNonSupportedFirmwareVersion,
+		semver.NewSemVer(9, 4, 0),
+		semver.NewSemVer(9, 5, 0),
+		lowestNonSupportedFirmwareVersion,
 	}
 	products := []common.Product{
 		common.ProductBitBox02Multi,
@@ -322,7 +328,7 @@ func TestRandom(t *testing.T) {
 
 		// Wrong response.
 		env.onRequest = func(request *messages.Request) *messages.Response {
-			return responseSuccess
+			return testDeviceResponseOK
 		}
 		_, err = env.device.Random()
 		require.Error(t, err)
@@ -348,7 +354,7 @@ func TestSetDeviceName(t *testing.T) {
 			setDeviceName, ok := request.Request.(*messages.Request_DeviceName)
 			require.True(t, ok)
 			require.Equal(t, expected, setDeviceName.DeviceName.Name)
-			return responseSuccess
+			return testDeviceResponseOK
 		}
 		require.NoError(t, env.device.SetDeviceName(expected))
 

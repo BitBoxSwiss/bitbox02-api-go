@@ -19,6 +19,7 @@ package main
 import (
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -149,22 +150,32 @@ func signFromTxID(device *firmware.Device, txID string) {
 			Value: outp.Value,
 		})
 	}
-	_, err := device.BTCSign(
-		messages.BTCCoin_TBTC,
-		[]*messages.BTCScriptConfigWithKeypath{
-			{
-				ScriptConfig: firmware.NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH),
-				Keypath:      []uint32{84 + HARDENED, 1 + HARDENED, 0 + HARDENED},
-			},
+	// _, err := device.BTCSign(
+	// 	messages.BTCCoin_TBTC,
+	// 	[]*messages.BTCScriptConfigWithKeypath{
+	// 		{
+	// 			ScriptConfig: firmware.NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH),
+	// 			Keypath:      []uint32{84 + HARDENED, 1 + HARDENED, 0 + HARDENED},
+	// 		},
+	// 	},
+	// 	&firmware.BTCTx{
+	// 		Version:  tx.Transaction.Version,
+	// 		Inputs:   inputs,
+	// 		Outputs:  outputs,
+	// 		Locktime: tx.Transaction.Locktime,
+	// 	},
+	// )
+	//errpanic(err)
+
+	a, _, _, err := device.BTCSignMessage(messages.BTCCoin_BTC,
+		&messages.BTCScriptConfigWithKeypath{
+			ScriptConfig: firmware.NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH),
+			Keypath:      []uint32{84 + HARDENED, 0 + HARDENED, 0 + HARDENED, 0, 0},
 		},
-		&firmware.BTCTx{
-			Version:  tx.Transaction.Version,
-			Inputs:   inputs,
-			Outputs:  outputs,
-			Locktime: tx.Transaction.Locktime,
-		},
+		[]byte(`asdsad`),
 	)
 	errpanic(err)
+	fmt.Println("LOL", a)
 }
 
 func main() {

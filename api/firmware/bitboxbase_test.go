@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package firmware_test
+package firmware
 
 import (
 	"testing"
@@ -25,7 +25,7 @@ import (
 func TestBitBoxBaseConfirmPairing(t *testing.T) {
 	testConfigurations(t, func(env *testEnv, t *testing.T) {
 		env.onRequest = func(*messages.Request) *messages.Response {
-			return responseSuccess
+			return testDeviceResponseOK
 		}
 
 		err := env.device.BitBoxBaseConfirmPairing(make([]byte, 32))
@@ -36,7 +36,7 @@ func TestBitBoxBaseConfirmPairing(t *testing.T) {
 func TestBitBoxBaseSetConfig(t *testing.T) {
 	testConfigurations(t, func(env *testEnv, t *testing.T) {
 		env.onRequest = func(*messages.Request) *messages.Response {
-			return responseSuccess
+			return testDeviceResponseOK
 		}
 		if env.product != common.ProductBitBoxBaseStandard {
 			// Wrong product.
