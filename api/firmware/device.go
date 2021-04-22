@@ -318,6 +318,31 @@ func (device *Device) Random() ([]byte, error) {
 	return randomResponse.RandomNumber.Number, nil
 }
 
+// RootFingerprint returns the keystore's root fingerprint, which is the first 32 bits of the
+// hash160 of the pubkey at the keypath m/.
+//
+// https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki#key-identifiers
+func (device *Device) RootFingerprint() ([]byte, error) {
+	request := &messages.Request{
+		Request: &messages.Request_Fingerprint{
+			Fingerprint: &messages.RootFingerprintRequest{},
+		},
+	}
+	response, err := device.query(request)
+	if err != nil {
+		return nil, err
+	}
+	fingerprintResponse, ok := response.Response.(*messages.Response_Fingerprint)
+	if !ok {
+		return nil, errp.New("expected Fingerprint response")
+	}
+	fingerprint := fingerprintResponse.Fingerprint.Fingerprint
+	if len(fingerprint) != 4 {
+		return nil, errp.Newf("fingerprint len=%d, expected 4", len(fingerprint))
+	}
+	return fingerprint, nil
+}
+
 // Product returns the device product.
 func (device *Device) Product() common.Product {
 	if device.product == nil {
