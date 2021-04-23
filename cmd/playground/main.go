@@ -206,6 +206,10 @@ func main() {
 	errpanic(err)
 	fmt.Printf("Root fingerprint: %x\n", rootFingerprint)
 
+	info, err := device.DeviceInfo()
+	errpanic(err)
+	fmt.Printf("Device info: %+v", info)
+
 	signFromTxID(device, "48e83b2a44c21dab01fc7bad0df1b1d7a59e48af79069454a8320ec6a9d1aefb")
 
 	// const HARDENED = 0x80000000

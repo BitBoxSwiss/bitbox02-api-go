@@ -68,6 +68,7 @@ func (device *Device) DeviceInfo() (*DeviceInfo, error) {
 		Version:                   deviceInfoResponse.DeviceInfo.Version,
 		Initialized:               deviceInfoResponse.DeviceInfo.Initialized,
 		MnemonicPassphraseEnabled: deviceInfoResponse.DeviceInfo.MnemonicPassphraseEnabled,
+		SecurechipModel:           deviceInfoResponse.DeviceInfo.SecurechipModel,
 	}
 
 	return deviceInfo, nil
