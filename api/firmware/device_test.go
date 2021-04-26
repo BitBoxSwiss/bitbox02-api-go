@@ -121,7 +121,8 @@ func newDevice(
 
 			responseBytes, err := proto.Marshal(response)
 			require.NoError(t, err)
-			encrypted := sendCipher.Encrypt(nil, nil, responseBytes)
+			encrypted, err := sendCipher.Encrypt(nil, nil, responseBytes)
+			require.NoError(t, err)
 			if version.AtLeast(semver.NewSemVer(7, 0, 0)) {
 				// prepend OP_STATUS_SUCCESS
 				encrypted = append([]byte{0x00}, encrypted...)
