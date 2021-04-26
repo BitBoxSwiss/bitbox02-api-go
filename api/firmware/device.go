@@ -112,6 +112,9 @@ type DeviceInfo struct {
 	Version                   string `json:"version"`
 	Initialized               bool   `json:"initialized"`
 	MnemonicPassphraseEnabled bool   `json:"mnemonicPassphraseEnabled"`
+	// This information is only available since firmwae v9.6.0. Will be an empty string for older
+	// firmware versions.
+	SecurechipModel string `json:"securechipModel"`
 }
 
 // NewDevice creates a new instance of Device.
