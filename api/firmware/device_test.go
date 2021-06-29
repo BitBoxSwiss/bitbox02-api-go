@@ -68,7 +68,7 @@ func newDevice(
 			return query
 		}
 		return func(msg []byte) ([]byte, error) {
-			// TODO: modularize and unit test the full hww* arbitration / cancelling.
+			// TODO: modularize and unit test the full hww* arbitration / canceling.
 			// 0x00 = HWW_REQ_NEW
 			require.Equal(t, byte(0x00), msg[0])
 			msg = msg[1:]
@@ -86,6 +86,7 @@ func newDevice(
 
 	communication.MockQuery = v7_0_0Query(func(msg []byte) ([]byte, error) {
 		if shakingHands {
+			//nolint:misspell
 			if version.AtLeast(semver.NewSemVer(7, 0, 0)) {
 				// 'H' = OP_HER_COMEZ_TEH_HANDSHAEK
 				require.Equal(t, byte('H'), msg[0])
