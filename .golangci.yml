@@ -1,5 +1,5 @@
-# This file contains all available configuration options
-# with their default values.
+# See reference docs for details:
+# https://golangci-lint.run/usage/configuration/
 
 # options for analysis running
 run:
@@ -33,8 +33,9 @@ linters-settings:
     enabled-checks:
       - assignOp
       - builtinShadow
-      - caseOrder
       - captLocal
+      - caseOrder
+      - defaultCaseOrder
       - dupArg
       - dupBranchBody
       - dupCase
@@ -51,9 +52,8 @@ linters-settings:
       - typeUnparen
       - underef
       - unslice
-      - defaultCaseOrder
   gocyclo:
-    min-complexity: 26
+    min-complexity: 27
   maligned:
     # print struct with more effective memory layout or not, false by default
     suggest-new: true
@@ -65,35 +65,39 @@ linters-settings:
     min-len: 3
     # minimal occurrences count to trigger, 3 by default
     min-occurrences: 3
+  misspell:
+    # Correct spellings using locale preferences for US or UK.
+    # Default is to use a neutral variety of English.
+    # Setting locale to US will correct the British spelling of 'colour' to 'color'.
+    locale: US
   lll:
     # max line length, lines longer will be reported. Default is 120.
     # '\t' is counted as 1 character by default, and can be changed with the tab-width option
     line-length: 120
     # allow long comments.
     exclude: '//'
-    # tab width in spaces. Default to 1.
-    tab-width: 4
-
 
 linters:
   enable-all: true
   disable:
-    - maligned
-    - prealloc
-    - lll
-    - gochecknoinits
-    - gochecknoglobals
-    - godox
-    - funlen
+    - gosec
     - dogsled
-    - whitespace
-    - bodyclose
-    - stylecheck
     - dupl
-    - wsl
-    - interfacer
-    - misspell
+    - funlen
+    - gochecknoglobals
+    - gochecknoinits
     - gocognit
+    - godox
+    - goerr113 # can't switch to errors.Is due to GopherJS still on go1.12
+    - gomnd
+    - interfacer
+    - lll
+    - maligned
+    - nestif
+    - prealloc
+    - stylecheck
+    - whitespace
+    - wsl
   disable-all: false
 
 issues:
@@ -102,12 +106,16 @@ issues:
   # it can be disabled by `exclude-use-default: false`. To list all
   # excluded by default patterns execute `golangci-lint run --help`
   exclude:
-    # TLS `InsecureSkipVerify` set true. (gas)
-    - G402
-    # Potential hardcoded credentials (gas)
-    - G101
-    # gas: Duplicated errcheck checks
-    - G104
   # Use linters in their original configuration. golangci-linter changes the default config, for
   # example skipping the docstring comment checks of golint.
   exclude-use-default: false
+
+  # Excluding configuration per-path, per-linter, per-text and per-source.
+  exclude-rules:
+    # In addition to always disabled linters above, exclude some more in tests.
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gocyclo
+        - godot
+        - testpackage
