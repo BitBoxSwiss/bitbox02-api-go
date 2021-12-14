@@ -145,9 +145,9 @@ func signFromTxID(device *firmware.Device, txID string) {
 		outputs = append(outputs, &messages.BTCSignOutputRequest{
 			Ours: false,
 			// TODO: parse pubkey script
-			Type:  messages.BTCOutputType_P2WSH,
-			Hash:  []byte("11111111111111111111111111111111"),
-			Value: outp.Value,
+			Type:    messages.BTCOutputType_P2WSH,
+			Payload: []byte("11111111111111111111111111111111"),
+			Value:   outp.Value,
 		})
 	}
 	// _, err := device.BTCSign(
