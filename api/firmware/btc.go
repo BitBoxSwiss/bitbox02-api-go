@@ -250,8 +250,14 @@ func (device *Device) BTCSign(
 			inputIndex := next.Index
 			input := *tx.Inputs[inputIndex].Input
 
+			simpleTypeConfig, ok := scriptConfigs[input.ScriptConfigIndex].ScriptConfig.Config.(*messages.BTCScriptConfig_SimpleType_)
+			inputIsSchnorr := ok && simpleTypeConfig.SimpleType == messages.BTCScriptConfig_P2TR
+
+			// Anti-Klepto protocol not supported yet for Schnorr signatures.
+			performAntiklepto := supportsAntiklepto && isInputsPass2 && !inputIsSchnorr
+
 			var hostNonce []byte
-			if supportsAntiklepto && isInputsPass2 {
+			if performAntiklepto {
 				nonce, err := generateHostNonce()
 				if err != nil {
 					return nil, err
@@ -269,7 +275,7 @@ func (device *Device) BTCSign(
 				return nil, err
 			}
 
-			if supportsAntiklepto && isInputsPass2 {
+			if performAntiklepto {
 				if next.Type != messages.BTCSignNextResponse_HOST_NONCE || next.AntiKleptoSignerCommitment == nil {
 					return nil, errp.New("unexpected response; expected signer nonce commitment")
 				}
