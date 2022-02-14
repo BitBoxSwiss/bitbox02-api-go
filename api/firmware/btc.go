@@ -197,14 +197,17 @@ func (device *Device) nestedQueryBtcSign(request *messages.BTCRequest) (
 	return next.SignNext, nil
 }
 
+func isTaproot(sc *messages.BTCScriptConfigWithKeypath) bool {
+	simpleTypeConfig, ok := sc.ScriptConfig.Config.(*messages.BTCScriptConfig_SimpleType_)
+	return ok && simpleTypeConfig.SimpleType == messages.BTCScriptConfig_P2TR
+}
+
 // BTCSignNeedsPrevTxs returns true if the PrevTx field in BTCTxInput needs to be populated before
 // calling BTCSign(). This is the case if there are any non-taproot inputs in the transaction to be
 // signed.
 func BTCSignNeedsPrevTxs(scriptConfigs []*messages.BTCScriptConfigWithKeypath) bool {
 	for _, sc := range scriptConfigs {
-		simpleTypeConfig, ok := sc.ScriptConfig.Config.(*messages.BTCScriptConfig_SimpleType_)
-		isTaproot := ok && simpleTypeConfig.SimpleType == messages.BTCScriptConfig_P2TR
-		if !isTaproot {
+		if !isTaproot(sc) {
 			return true
 		}
 	}
@@ -244,6 +247,14 @@ func (device *Device) BTCSign(
 	scriptConfigs []*messages.BTCScriptConfigWithKeypath,
 	tx *BTCTx,
 ) ([][]byte, error) {
+	if !device.version.AtLeast(semver.NewSemVer(9, 10, 0)) {
+		for _, sc := range scriptConfigs {
+			if isTaproot(sc) {
+				return nil, UnsupportedError("9.10.0")
+			}
+		}
+	}
+
 	supportsAntiklepto := device.version.AtLeast(semver.NewSemVer(9, 4, 0))
 
 	signatures := make([][]byte, len(tx.Inputs))
@@ -268,8 +279,7 @@ func (device *Device) BTCSign(
 			inputIndex := next.Index
 			input := *tx.Inputs[inputIndex].Input
 
-			simpleTypeConfig, ok := scriptConfigs[input.ScriptConfigIndex].ScriptConfig.Config.(*messages.BTCScriptConfig_SimpleType_)
-			inputIsSchnorr := ok && simpleTypeConfig.SimpleType == messages.BTCScriptConfig_P2TR
+			inputIsSchnorr := isTaproot(scriptConfigs[input.ScriptConfigIndex])
 
 			// Anti-Klepto protocol not supported yet for Schnorr signatures.
 			performAntiklepto := supportsAntiklepto && isInputsPass2 && !inputIsSchnorr
@@ -450,6 +460,9 @@ func (device *Device) BTCSignMessage(
 	scriptConfig *messages.BTCScriptConfigWithKeypath,
 	message []byte,
 ) (raw []byte, recID byte, electrum65 []byte, err error) {
+	if isTaproot(scriptConfig) {
+		return nil, 0, nil, errp.New("taproot not supported")
+	}
 	if !device.version.AtLeast(semver.NewSemVer(9, 2, 0)) {
 		return nil, 0, nil, UnsupportedError("9.2.0")
 	}
