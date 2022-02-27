@@ -199,6 +199,12 @@ func main() {
 	const bitboxCMD = 0x80 + 0x40 + 0x01
 	comm := u2fhid.NewCommunication(hidDevice, bitboxCMD)
 	device := firmware.NewDevice(nil, nil, &mocks.Config{}, comm, &mocks.Logger{})
+	device.SetOnEvent(func(ev firmware.Event, meta interface{}) {
+		if ev == firmware.EventAttestationCheckDone {
+			attestation := device.Attestation()
+			fmt.Println("Attestation check:", *attestation)
+		}
+	})
 	device.Init()
 	device.ChannelHashVerify(true)
 
