@@ -37,6 +37,7 @@ func newDevice(
 	communication *mocks.Communication,
 	onRequest func(*messages.Request) *messages.Response,
 ) *Device {
+	t.Helper()
 
 	device := NewDevice(
 		version,
@@ -238,7 +239,8 @@ type testEnv struct {
 	onRequest     func(*messages.Request) *messages.Response
 }
 
-func testConfigurations(t *testing.T, run func(*testEnv, *testing.T)) {
+func testConfigurations(t *testing.T, run func(*testing.T, *testEnv)) {
+	t.Helper()
 	versions := []*semver.SemVer{
 		semver.NewSemVer(1, 0, 0),
 		semver.NewSemVer(2, 0, 0),
@@ -283,26 +285,29 @@ func testConfigurations(t *testing.T, run func(*testEnv, *testing.T)) {
 				continue
 			}
 			t.Run(fmt.Sprintf("%v %s", env, env.version), func(t *testing.T) {
-				run(&env, t)
+				run(t, &env)
 			})
 		}
 	}
 }
 
 func TestVersion(t *testing.T) {
-	testConfigurations(t, func(env *testEnv, t *testing.T) {
+	testConfigurations(t, func(t *testing.T, env *testEnv) {
+		t.Helper()
 		require.Equal(t, env.version, env.device.Version())
 	})
 }
 
 func TestProduct(t *testing.T) {
-	testConfigurations(t, func(env *testEnv, t *testing.T) {
+	testConfigurations(t, func(t *testing.T, env *testEnv) {
+		t.Helper()
 		require.Equal(t, env.product, env.device.Product())
 	})
 }
 
 func TestClose(t *testing.T) {
-	testConfigurations(t, func(env *testEnv, t *testing.T) {
+	testConfigurations(t, func(t *testing.T, env *testEnv) {
+		t.Helper()
 		called := false
 		env.communication.MockClose = func() { called = true }
 		env.device.Close()
@@ -311,7 +316,8 @@ func TestClose(t *testing.T) {
 }
 
 func TestSetDeviceName(t *testing.T) {
-	testConfigurations(t, func(env *testEnv, t *testing.T) {
+	testConfigurations(t, func(t *testing.T, env *testEnv) {
+		t.Helper()
 		// Name too long.
 		require.Error(t, env.device.SetDeviceName(
 			"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))

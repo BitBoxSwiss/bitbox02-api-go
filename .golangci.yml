@@ -51,6 +51,7 @@ linters-settings:
       - typeSwitchVar
       - typeUnparen
       - underef
+      - unlambda
       - unslice
   gocyclo:
     min-complexity: 29
@@ -80,7 +81,11 @@ linters-settings:
 linters:
   enable-all: true
   disable:
+    - golint
+    - scopelint
+    - interfacer
     - gosec
+    - bodyclose
     - dogsled
     - dupl
     - funlen
@@ -90,7 +95,6 @@ linters:
     - godox
     - goerr113 # can't switch to errors.Is due to GopherJS still on go1.12
     - gomnd
-    - interfacer
     - lll
     - maligned
     - nestif
@@ -98,6 +102,31 @@ linters:
     - stylecheck
     - whitespace
     - wsl
+    - execinquery
+    - ireturn
+    - wrapcheck
+    - varnamelen
+    - tagliatelle
+    - paralleltest
+    - nonamedreturns
+    - noctx
+    - nlreturn
+    - cyclop
+    - ifshort
+    - exhaustive
+    - nilnil
+    - nilerr
+    - forcetypeassert
+    - exhaustivestruct
+    - exhaustruct
+    - maintidx
+    - errorlint
+    - gofumpt
+    - gci
+    - errname
+    - forbidigo
+    - makezero
+    - nolintlint
   disable-all: false
 
 issues:
@@ -112,10 +141,11 @@ issues:
 
   # Excluding configuration per-path, per-linter, per-text and per-source.
   exclude-rules:
-    # In addition to always disabled linters above, exclude some more in tests.
+    # In addition to always disalbed linters above, exclude some more in tests.
     - path: _test\.go
       linters:
         - errcheck
         - gocyclo
         - godot
+        - gosec
         - testpackage

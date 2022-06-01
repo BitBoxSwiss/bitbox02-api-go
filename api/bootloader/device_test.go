@@ -54,7 +54,8 @@ type testEnv struct {
 	device          *bootloader.Device
 }
 
-func testConfigurations(t *testing.T, run func(*testEnv, *testing.T)) {
+func testConfigurations(t *testing.T, run func(*testing.T, *testEnv)) {
+	t.Helper()
 	for _, product := range []common.Product{
 		common.ProductBitBox02Multi,
 		common.ProductBitBox02BTCOnly,
@@ -70,19 +71,21 @@ func testConfigurations(t *testing.T, run func(*testEnv, *testing.T)) {
 			func(status *bootloader.Status) { env.onStatusChanged(status) },
 		)
 		t.Run(fmt.Sprintf("%v", env), func(t *testing.T) {
-			run(&env, t)
+			run(t, &env)
 		})
 	}
 }
 
 func TestProduct(t *testing.T) {
-	testConfigurations(t, func(env *testEnv, t *testing.T) {
+	testConfigurations(t, func(t *testing.T, env *testEnv) {
+		t.Helper()
 		require.Equal(t, env.product, env.device.Product())
 	})
 }
 
 func TestClose(t *testing.T) {
-	testConfigurations(t, func(env *testEnv, t *testing.T) {
+	testConfigurations(t, func(t *testing.T, env *testEnv) {
+		t.Helper()
 		called := false
 		env.communication.close = func() {
 			called = true
@@ -93,7 +96,8 @@ func TestClose(t *testing.T) {
 }
 
 func TestVersions(t *testing.T) {
-	testConfigurations(t, func(env *testEnv, t *testing.T) {
+	testConfigurations(t, func(t *testing.T, env *testEnv) {
+		t.Helper()
 		t.Run("happy", func(t *testing.T) {
 			env.communication.query = func(msg []byte) ([]byte, error) {
 				require.Equal(t, []byte("v"), msg)
@@ -135,7 +139,8 @@ func TestVersions(t *testing.T) {
 }
 
 func TestGetHashes(t *testing.T) {
-	testConfigurations(t, func(env *testEnv, t *testing.T) {
+	testConfigurations(t, func(t *testing.T, env *testEnv) {
+		t.Helper()
 		for _, test := range []struct {
 			param1      bool
 			param2      bool
@@ -186,7 +191,8 @@ func TestSignedFirmwareVersion(t *testing.T) {
 		panic(err)
 	}
 
-	testConfigurations(t, func(env *testEnv, t *testing.T) {
+	testConfigurations(t, func(t *testing.T, env *testEnv) {
+		t.Helper()
 		if env.product != common.ProductBitBox02BTCOnly {
 			return
 		}
@@ -214,7 +220,8 @@ func TestUpgradeFirmware(t *testing.T) {
 		panic(err)
 	}
 
-	testConfigurations(t, func(env *testEnv, t *testing.T) {
+	testConfigurations(t, func(t *testing.T, env *testEnv) {
+		t.Helper()
 		if env.product != common.ProductBitBox02BTCOnly {
 			// Invalid firmware magic (does not match the product).
 			var lastStatus *bootloader.Status
@@ -320,7 +327,8 @@ func TestUpgradeFirmware(t *testing.T) {
 }
 
 func TestErased(t *testing.T) {
-	testConfigurations(t, func(env *testEnv, t *testing.T) {
+	testConfigurations(t, func(t *testing.T, env *testEnv) {
+		t.Helper()
 		var versionResponse, hashesResponse []byte
 		env.communication.query = func(msg []byte) ([]byte, error) {
 			switch msg[0] {
