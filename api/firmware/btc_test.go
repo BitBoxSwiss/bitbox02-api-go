@@ -40,7 +40,8 @@ func TestNewXPub(t *testing.T) {
 }
 
 func TestBTCXPub(t *testing.T) {
-	testConfigurations(t, func(env *testEnv, t *testing.T) {
+	testConfigurations(t, func(t *testing.T, env *testEnv) {
+		t.Helper()
 		expected := "mocked-xpub"
 		xpubType := messages.BTCPubRequest_YPUB
 		expectedPubRequest := &messages.BTCPubRequest{
@@ -110,7 +111,8 @@ func TestBTCXPub(t *testing.T) {
 }
 
 func TestBTCAddress(t *testing.T) {
-	testConfigurations(t, func(env *testEnv, t *testing.T) {
+	testConfigurations(t, func(t *testing.T, env *testEnv) {
+		t.Helper()
 		expected := "mocked-address"
 		scriptConfig := NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH_P2SH)
 		expectedPubRequest := &messages.BTCPubRequest{
@@ -180,7 +182,8 @@ func TestBTCAddress(t *testing.T) {
 }
 
 func TestBTCSignMessage(t *testing.T) {
-	testConfigurations(t, func(env *testEnv, t *testing.T) {
+	testConfigurations(t, func(t *testing.T, env *testEnv) {
+		t.Helper()
 		hostNonce := []byte("\x55\xae\x3b\xbb\x4c\x9e\xc5\x27\xca\xc1\x48\x92\xe9\xd7\x29\x81\x82\xf2\x1d\x5c\xa0\xa5\xf3\xc4\x30\x42\x3e\x52\xfe\x1c\xb9\x10")
 		expectedSig := []byte("\xb1\xf8\x62\x29\x55\xc2\x67\xf9\x01\x0b\xd9\x1d\xa8\x46\x93\x67\xb5\xd1\xab\xd1\x95\x72\x1c\xa8\xc1\xd0\xc5\x2a\x37\x73\x84\xbb\x44\xa9\x92\x7e\x42\xaf\xf8\x91\xfa\x8b\xd1\x9e\x77\x86\x62\x1e\x57\xfb\xe4\x14\x79\x9d\x71\x29\x25\xed\xbc\x3b\x5b\x68\xc8\x95\x00")
 		env.onRequest = func(request *messages.Request) *messages.Response {
