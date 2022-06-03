@@ -34,6 +34,8 @@ import (
 const (
 	bitbox02VendorID  = 0x03eb
 	bitbox02ProductID = 0x2403
+
+	HARDENED = 0x80000000
 )
 
 func errpanic(err error) {
@@ -87,8 +89,6 @@ func signFromTxID(device *firmware.Device, txID string) {
 	tx := getTx(txID)
 	inputs := []*firmware.BTCTxInput{}
 	outputs := []*messages.BTCSignOutputRequest{}
-
-	const HARDENED = 0x80000000
 
 	unhex := func(s string) []byte {
 		b, err := hex.DecodeString(s)
@@ -150,32 +150,23 @@ func signFromTxID(device *firmware.Device, txID string) {
 			Value:   outp.Value,
 		})
 	}
-	// _, err := device.BTCSign(
-	// 	messages.BTCCoin_TBTC,
-	// 	[]*messages.BTCScriptConfigWithKeypath{
-	// 		{
-	// 			ScriptConfig: firmware.NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH),
-	// 			Keypath:      []uint32{84 + HARDENED, 1 + HARDENED, 0 + HARDENED},
-	// 		},
-	// 	},
-	// 	&firmware.BTCTx{
-	// 		Version:  tx.Transaction.Version,
-	// 		Inputs:   inputs,
-	// 		Outputs:  outputs,
-	// 		Locktime: tx.Transaction.Locktime,
-	// 	},
-	// )
-	//errpanic(err)
-
-	a, _, _, err := device.BTCSignMessage(messages.BTCCoin_BTC,
-		&messages.BTCScriptConfigWithKeypath{
-			ScriptConfig: firmware.NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH),
-			Keypath:      []uint32{84 + HARDENED, 0 + HARDENED, 0 + HARDENED, 0, 0},
+	_, err := device.BTCSign(
+		messages.BTCCoin_TBTC,
+		[]*messages.BTCScriptConfigWithKeypath{
+			{
+				ScriptConfig: firmware.NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH),
+				Keypath:      []uint32{84 + HARDENED, 1 + HARDENED, 0 + HARDENED},
+			},
 		},
-		[]byte(`asdsad`),
+		&firmware.BTCTx{
+			Version:  tx.Transaction.Version,
+			Inputs:   inputs,
+			Outputs:  outputs,
+			Locktime: tx.Transaction.Locktime,
+		},
 	)
 	errpanic(err)
-	fmt.Println("LOL", a)
+
 }
 
 func main() {
@@ -216,37 +207,63 @@ func main() {
 	errpanic(err)
 	fmt.Printf("Device info: %+v", info)
 
-	signFromTxID(device, "48e83b2a44c21dab01fc7bad0df1b1d7a59e48af79069454a8320ec6a9d1aefb")
+	//signFromTxID(device, "48e83b2a44c21dab01fc7bad0df1b1d7a59e48af79069454a8320ec6a9d1aefb")
 
-	// const HARDENED = 0x80000000
-
-	// fmt.Println(device.BTCSignMessage(
-	// 	messages.BTCCoin_BTC,
+	sig, err := device.ETHSignTypedMessage(
+		1,
+		[]uint32{44 + HARDENED, 60 + HARDENED, 0 + HARDENED, 0, 0},
+		[]byte(`{
+    "types": {
+        "EIP712Domain": [
+            { "name": "name", "type": "string" },
+            { "name": "version", "type": "string" },
+            { "name": "chainId", "type": "uint256" },
+            { "name": "verifyingContract", "type": "address" }
+        ],
+        "Attachment": [
+            { "name": "contents", "type": "string" }
+        ],
+        "Person": [
+            { "name": "name", "type": "string" },
+            { "name": "wallet", "type": "address" }
+        ],
+        "Mail": [
+            { "name": "from", "type": "Person" },
+            { "name": "to", "type": "Person" },
+            { "name": "contents", "type": "string" },
+            { "name": "attachments", "type": "Attachment[]" }
+        ]
+    },
+    "primaryType": "Mail",
+    "domain": {
+        "name": "Ether Mail",
+        "version": "1",
+        "chainId": 1,
+        "verifyingContract": "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"
+    },
+    "message": {
+        "from": {
+            "name": "Cow",
+            "wallet": "0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826"
+        },
+        "to": {
+            "name": "Bob",
+            "wallet": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"
+        },
+        "contents": "Hello, Bob!",
+        "attachments": [{ "contents": "attachment1" }, { "contents": "attachment2" }]
+    }
+}`),
+	)
+	errpanic(err)
+	fmt.Println(sig)
+	// _, _, _, err = device.BTCSignMessage(messages.BTCCoin_BTC,
 	// 	&messages.BTCScriptConfigWithKeypath{
-	// 		ScriptConfig: firmware.NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH_P2SH),
-	// 		Keypath:      []uint32{49 + HARDENED, 0 + HARDENED, 0 + HARDENED, 0, 0},
+	// 		ScriptConfig: firmware.NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH),
+	// 		Keypath:       []uint32{84 + HARDENED, 0 + HARDENED, 0 + HARDENED, 0, 0},
 	// 	},
-	// 	[]byte("message"),
-	// ))
-
-	// keypathAccount := []uint32{48 + HARDENED, 0 + HARDENED, 0 + HARDENED, 2 + HARDENED}
-	// coin := messages.BTCCoin_BTC
-	// ourXPub, err := device.BTCXPub(
-	// 	coin,
-	// 	keypathAccount,
-	// 	messages.BTCPubRequest_XPUB,
-	// 	false,
+	// 	[]byte(`asdsad`),
 	// )
 	// errpanic(err)
 
-	// scriptConfig, err := firmware.NewBTCScriptConfigMultisig(
-	// 	1,
-	// 	[]string{
-	// 		ourXPub,
-	// 		"xpub6FEZ9Bv73h1vnE4TJG4QFj2RPXJhhsPbnXgFyH3ErLvpcZrDcynY65bhWga8PazWHLSLi23PoBhGcLcYW6JRiJ12zXZ9Aop4LbAqsS3gtcy",
-	// 	},
-	// 	0, // ourXPubIndex,
-	// )
-	// errpanic(err)
-	// fmt.Println(device.BTCAddress(coin, append(keypathAccount, 0, 0), scriptConfig, true))
 }
