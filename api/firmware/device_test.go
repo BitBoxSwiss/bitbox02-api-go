@@ -25,8 +25,8 @@ import (
 	"github.com/digitalbitbox/bitbox02-api-go/api/firmware/mocks"
 	"github.com/digitalbitbox/bitbox02-api-go/util/semver"
 	"github.com/flynn/noise"
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 // newDevice creates a device to test with, with init/pairing already processed.
