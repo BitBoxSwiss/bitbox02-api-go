@@ -22,9 +22,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"math/big"
 	"testing"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
+	btcec_ecdsa "github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/digitalbitbox/bitbox02-api-go/api/common"
 	"github.com/digitalbitbox/bitbox02-api-go/api/firmware/mocks"
 	"github.com/digitalbitbox/bitbox02-api-go/util/semver"
@@ -53,11 +55,21 @@ func makeCertificate(rootPrivkey *btcec.PrivateKey, bootloaderHash []byte, devic
 	certMsg.Write(bootloaderHash)
 	certMsg.Write(devicePubkey)
 	sigHash := sha256.Sum256(certMsg.Bytes())
-	signature, err := rootPrivkey.Sign(sigHash[:])
+	signature, err := btcec_ecdsa.SignCompact(rootPrivkey, sigHash[:], true)
 	if err != nil {
 		panic(err)
 	}
-	return append(signature.R.Bytes(), signature.S.Bytes()...)
+	return signature[1:]
+}
+
+// adapted from ecdsa.GenerateKey()
+func p256PrivKeyFromBytes(k []byte) *ecdsa.PrivateKey {
+	priv := new(ecdsa.PrivateKey)
+	c := elliptic.P256()
+	priv.PublicKey.Curve = c
+	priv.D = new(big.Int).SetBytes(k)
+	priv.PublicKey.X, priv.PublicKey.Y = c.ScalarBaseMult(k)
+	return priv
 }
 
 func TestAttestation(t *testing.T) {
@@ -65,15 +77,16 @@ func TestAttestation(t *testing.T) {
 	// Arbitrary values, they do not have any special meaning.
 	rootPubkeyIdentifier := unhex("78961bc16e9bc8144dd3db4fd8488e33ed93541f56943db17044e8f0a42b0ec1")
 	rootPrivateKey, rootPublicKey := btcec.PrivKeyFromBytes(
-		btcec.S256(),
 		unhex("15608dfed8e876bed1cf2599574ce853f7a2a017d19ba0aabd4bcba033a70880"),
 	)
 	bootloaderHash := unhex("3fdf2ff2dcbd31d161a525a88cb57641209c7eac2bc014564a03d34a825144f0")
-	devicePrivateKey, devicePublicKey := btcec.PrivKeyFromBytes(
-		elliptic.P256(),
+	devicePrivateKey := p256PrivKeyFromBytes(
 		unhex("9b1a4d293a6eef1960d8afab5e58dd581b135152ec3399bde9268fa23051321b"),
 	)
-	devicePubkeyBytes := devicePublicKey.SerializeUncompressed()[1:]
+	devicePublicKey := devicePrivateKey.PublicKey
+	devicePubkeyBytes := make([]byte, 64)
+	copy(devicePubkeyBytes[:32], devicePublicKey.X.Bytes())
+	copy(devicePubkeyBytes[32:], devicePublicKey.Y.Bytes())
 
 	undo := addAttestationPubkey(
 		hex.EncodeToString(rootPubkeyIdentifier),
@@ -182,7 +195,7 @@ func TestAttestation(t *testing.T) {
 	communication.MockQuery = func(msg []byte) ([]byte, error) {
 		challenge := msg[1:]
 		sigHash := sha256.Sum256(challenge)
-		sigR, sigS, err := ecdsa.Sign(rand.Reader, devicePrivateKey.ToECDSA(), sigHash[:])
+		sigR, sigS, err := ecdsa.Sign(rand.Reader, devicePrivateKey, sigHash[:])
 		if err != nil {
 			panic(err)
 		}
