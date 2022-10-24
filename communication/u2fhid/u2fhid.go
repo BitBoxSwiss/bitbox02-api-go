@@ -166,8 +166,9 @@ func (communication *Communication) readFrame() ([]byte, error) {
 	if readLen < 7 {
 		return nil, errp.New("expected minimum read length of 7")
 	}
-	if read[0] != 0xff || read[1] != 0 || read[2] != 0 || read[3] != 0 {
-		return nil, errp.Newf("USB command ID mismatch %d %d %d %d", read[0], read[1], read[2], read[3])
+	replyCid := binary.BigEndian.Uint32(read[:4])
+	if replyCid != cid {
+		return nil, errp.Newf("USB command ID mismatch, %v != %v", cid, replyCid)
 	}
 	if read[4] != communication.cmd {
 		return nil, errp.Newf("USB command frame mismatch (%d, expected %d)", read[4], communication.cmd)
