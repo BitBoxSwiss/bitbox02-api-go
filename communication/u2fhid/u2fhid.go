@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	"runtime"
 	"sync"
 
 	"github.com/digitalbitbox/bitbox02-api-go/util/errp"
@@ -103,6 +104,18 @@ func (communication *Communication) sendFrame(msg string) error {
 			buf.WriteByte(0xee)
 		}
 		x := buf.Bytes() // needs to be in a var: https://github.com/golang/go/issues/14210#issuecomment-346402945
+		if runtime.GOOS != "windows" {
+			// packets have a 0 byte report ID in front. The karalabe usb library adds it
+			// automatically for windows, and not for unix, as there, it is stripped by the signal11
+			// hid library. We have to add it (to be stripped by signal11), otherwise a zero that is
+			// actually part of the packet would be stripped, leading to a corrupt packet. Our
+			// packets could start with a zero if e.g. the 4-bytes CID starts with a zero byte
+			//
+			// See
+			// - https://github.com/karalabe/usb/blob/87927bb2c8544d009d8ac7350b1ac892b60c8115/hid_enabled.go#L126-L128.
+			// - https://github.com/karalabe/usb/blob/87927bb2c8544d009d8ac7350b1ac892b60c8115/hidapi/libusb/hid.c#L1003-L1007
+			x = append([]byte{0}, x...)
+		}
 		_, err := communication.device.Write(x)
 		return errp.WithMessage(errp.WithStack(err), "Failed to send message")
 	}
