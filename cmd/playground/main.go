@@ -164,6 +164,7 @@ func signFromTxID(device *firmware.Device, txID string) {
 			Outputs:  outputs,
 			Locktime: tx.Transaction.Locktime,
 		},
+		messages.BTCSignInitRequest_DEFAULT,
 	)
 	errpanic(err)
 
