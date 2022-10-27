@@ -31,7 +31,7 @@ const (
 
 const (
 	// CID - channel identifier.
-	cid = 0xff000000
+	cid uint32 = 0xff000000
 )
 
 func newBuffer() *bytes.Buffer {
@@ -109,7 +109,7 @@ func (communication *Communication) sendFrame(msg string) error {
 	readBuffer := bytes.NewBuffer([]byte(msg))
 	// init frame
 	header := newBuffer()
-	if err := binary.Write(header, binary.BigEndian, uint32(cid)); err != nil {
+	if err := binary.Write(header, binary.BigEndian, cid); err != nil {
 		return errp.WithStack(err)
 	}
 	if err := binary.Write(header, binary.BigEndian, communication.cmd); err != nil {
@@ -124,7 +124,7 @@ func (communication *Communication) sendFrame(msg string) error {
 	for seq := 0; readBuffer.Len() > 0; seq++ {
 		// cont frame
 		header = newBuffer()
-		if err := binary.Write(header, binary.BigEndian, uint32(cid)); err != nil {
+		if err := binary.Write(header, binary.BigEndian, cid); err != nil {
 			return errp.WithStack(err)
 		}
 		if err := binary.Write(header, binary.BigEndian, uint8(seq)); err != nil {
