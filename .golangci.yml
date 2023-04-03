@@ -127,6 +127,14 @@ linters:
     - forbidigo
     - makezero
     - nolintlint
+    - gocyclo
+    - nosnakecase
+    - interfacebloat
+    - revive
+    - musttag
+    - structcheck
+    - deadcode
+    - varcheck
   disable-all: false
 
 issues:
