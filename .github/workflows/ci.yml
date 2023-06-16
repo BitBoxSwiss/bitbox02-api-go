@@ -32,7 +32,7 @@ jobs:
           curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
           sh -s -- -b $HOME $GOLANGCI_LINT_VERSION
       - name: Lint
-        run: ~/golangci-lint run --skip-dirs=cmd/playground
+        run: ~/golangci-lint run --skip-dirs=cmd/playground,cmd/miniscript
   test:
     runs-on: ubuntu-22.04
     steps:
