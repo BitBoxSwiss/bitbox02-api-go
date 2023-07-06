@@ -197,7 +197,7 @@ func main() {
 			fmt.Println("Attestation check:", *attestation)
 		}
 	})
-	device.Init()
+	errpanic(device.Init())
 	device.ChannelHashVerify(true)
 
 	rootFingerprint, err := device.RootFingerprint()
