@@ -199,6 +199,10 @@ func TestEncodeValue(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []byte("\xb1\xd8\x4b\x7c"), encoded)
 
+	encoded, err = encodeValue(parseTypeNoErr(t, "uint64", nil), "0xb1d84b7c")
+	require.NoError(t, err)
+	require.Equal(t, []byte("\xb1\xd8\x4b\x7c"), encoded)
+
 	encoded, err = encodeValue(parseTypeNoErr(t, "int64", nil), float64(2983742332))
 	require.NoError(t, err)
 	require.Equal(t, []byte("\xb1\xd8\x4b\x7c"), encoded)
