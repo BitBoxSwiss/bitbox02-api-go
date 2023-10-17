@@ -429,11 +429,11 @@ func encodeValue(typ *messages.ETHSignTypedMessageRequest_MemberType, value inte
 		case float64:
 			v64 := int64(v)
 			if float64(v64) != v {
-				return nil, errp.Newf("float64 is not an uint: %v", v)
+				return nil, errp.Newf("float64 is not an int: %v", v)
 			}
 			bigint.SetInt64(v64)
 		default:
-			return nil, errp.New("wrong type for uint")
+			return nil, errp.New("wrong type for int")
 		}
 		return bigendianInt(bigint), nil
 	case messages.ETHSignTypedMessageRequest_BOOL:
@@ -497,7 +497,7 @@ func getValue(what *messages.ETHTypedMessageValueResponse, msg map[string]interf
 	return encodeValue(typ, value)
 }
 
-// ETHSignTypedMessage signs an Ethereum EIP-612 typed message. 27 is added to the recID to denote
+// ETHSignTypedMessage signs an Ethereum EIP-712 typed message. 27 is added to the recID to denote
 // an uncompressed pubkey.
 func (device *Device) ETHSignTypedMessage(
 	chainID uint64,
