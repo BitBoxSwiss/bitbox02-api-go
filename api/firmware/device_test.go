@@ -180,9 +180,8 @@ func newDevice(
 
 	{ // Test upgrade required and actual upgrade, which for the firmware only means to reboot into the bootloader.
 		lowestSupported := map[common.Product]*semver.SemVer{
-			common.ProductBitBox02Multi:      lowestSupportedFirmwareVersion,
-			common.ProductBitBox02BTCOnly:    lowestSupportedFirmwareVersionBTCOnly,
-			common.ProductBitBoxBaseStandard: lowestSupportedFirmwareVersionBitBoxBaseStandard,
+			common.ProductBitBox02Multi:   lowestSupportedFirmwareVersion,
+			common.ProductBitBox02BTCOnly: lowestSupportedFirmwareVersionBTCOnly,
 		}
 		lowestSupportedFirmwareVersion, ok := lowestSupported[product]
 		require.True(t, ok)
@@ -263,7 +262,6 @@ func testConfigurations(t *testing.T, run func(*testing.T, *testEnv)) {
 	products := []common.Product{
 		common.ProductBitBox02Multi,
 		common.ProductBitBox02BTCOnly,
-		common.ProductBitBoxBaseStandard,
 	}
 	for _, version := range versions {
 		for _, product := range products {
