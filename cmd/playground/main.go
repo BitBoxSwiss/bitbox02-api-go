@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/big"
 	"net/http"
 
 	"github.com/digitalbitbox/bitbox02-api-go/api/common"
@@ -187,7 +188,6 @@ func main() {
 	}()
 	hidDevice, err := deviceInfo.Open()
 	errpanic(err)
-
 	const bitboxCMD = 0x80 + 0x40 + 0x01
 	comm := u2fhid.NewCommunication(hidDevice, bitboxCMD)
 	device := firmware.NewDevice(nil, nil, &mocks.Config{}, comm, &mocks.Logger{})
@@ -210,7 +210,21 @@ func main() {
 
 	//signFromTxID(device, "48e83b2a44c21dab01fc7bad0df1b1d7a59e48af79069454a8320ec6a9d1aefb")
 
-	sig, err := device.ETHSignTypedMessage(
+	sig, err := device.ETHSignEIP1559(
+		1,
+		[]uint32{44 + HARDENED, 60 + HARDENED, 0 + HARDENED, 0, 0},
+		1,
+		new(big.Int).SetBytes([]byte("\x77\x35\x94\x00")),
+		new(big.Int).SetBytes([]byte("\x02\x54\x0b\xe4\x00")),
+		21000,
+		[20]byte{0xd6, 0x10, 0x54, 0xf4, 0x45, 0x6d, 0x05, 0x55, 0xdc, 0x2d, 0xd8, 0x2b, 0x77, 0xf7, 0xad, 0x60, 0x74, 0x83, 0x61, 0x49},
+		new(big.Int).SetBytes([]byte("\x5a\xf3\x10\x7a\x40\x00")),
+		nil,
+	)
+	errpanic(err)
+	fmt.Println(sig)
+
+	sig, err = device.ETHSignTypedMessage(
 		1,
 		[]uint32{44 + HARDENED, 60 + HARDENED, 0 + HARDENED, 0, 0},
 		[]byte(`{
