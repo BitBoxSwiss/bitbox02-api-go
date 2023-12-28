@@ -135,6 +135,12 @@ linters:
     - structcheck
     - deadcode
     - varcheck
+    - depguard
+    - protogetter
+    - gosmopolitan
+    - inamedparam
+    # could not find a way to disable float-compare: https://github.com/golangci/golangci-lint/issues/4187
+    - testifylint
   disable-all: false
 
 issues:

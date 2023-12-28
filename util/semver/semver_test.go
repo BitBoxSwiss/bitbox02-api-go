@@ -33,28 +33,28 @@ func TestNewSemVer(t *testing.T) {
 	assert.Equal(t, semver.NewSemVer(3, 2, 4), version)
 
 	_, err = semver.NewSemVerFromString("")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	_, err = semver.NewSemVerFromString("vv3.2.4")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	_, err = semver.NewSemVerFromString("3.2")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	_, err = semver.NewSemVerFromString("v3.2")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	_, err = semver.NewSemVerFromString("3.2.")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	_, err = semver.NewSemVerFromString("3.2.A")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	_, err = semver.NewSemVerFromString("3.A.4")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	_, err = semver.NewSemVerFromString("3.2.4-")
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestAtLeast(t *testing.T) {
@@ -73,7 +73,7 @@ func TestString(t *testing.T) {
 func TestJSON(t *testing.T) {
 	jsonBytes, err := json.Marshal(semver.NewSemVer(3, 2, 4))
 	require.NoError(t, err)
-	require.Equal(t, string(jsonBytes), `"3.2.4"`)
+	require.Equal(t, `"3.2.4"`, string(jsonBytes))
 
 	var version semver.SemVer
 	require.Error(t, json.Unmarshal([]byte(`123`), &version))
