@@ -263,7 +263,7 @@ func TestUpgradeFirmware(t *testing.T) {
 		sleepCalls := 0
 		env.device.TstSetSleep(func(d time.Duration) {
 			require.Equal(t, time.Second, d)
-			require.True(t, sleepCalls < rebootSeconds)
+			require.Less(t, sleepCalls, rebootSeconds)
 			require.True(t, currentStatus.UpgradeSuccessful)
 			require.Equal(t, rebootSeconds-sleepCalls, currentStatus.RebootSeconds)
 			sleepCalls++
