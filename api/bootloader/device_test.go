@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"testing"
-	"time"
 
 	"github.com/digitalbitbox/bitbox02-api-go/api/bootloader"
 	"github.com/digitalbitbox/bitbox02-api-go/api/common"
@@ -259,16 +258,6 @@ func TestUpgradeFirmware(t *testing.T) {
 			return nil
 		}
 
-		const rebootSeconds = 5
-		sleepCalls := 0
-		env.device.TstSetSleep(func(d time.Duration) {
-			require.Equal(t, time.Second, d)
-			require.Less(t, sleepCalls, rebootSeconds)
-			require.True(t, currentStatus.UpgradeSuccessful)
-			require.Equal(t, rebootSeconds-sleepCalls, currentStatus.RebootSeconds)
-			sleepCalls++
-		})
-
 		require.Zero(t, *env.device.Status())
 		require.NoError(t, env.device.UpgradeFirmware(signedFirmware))
 
@@ -319,9 +308,8 @@ func TestUpgradeFirmware(t *testing.T) {
 		require.True(t, status.UpgradeSuccessful)
 
 		// reboot
-		msg, status = takeOne()
+		msg, _ = takeOne()
 		require.Equal(t, byte('r'), msg[0])
-		require.Equal(t, 1, status.RebootSeconds)
 	})
 }
 
