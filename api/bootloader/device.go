@@ -17,7 +17,6 @@ package bootloader
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/binary"
 	"io"
 	"math"
@@ -309,17 +308,9 @@ func (device *Device) Erased() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	firmwareVersionLE := make([]byte, 4)
-	binary.LittleEndian.PutUint32(firmwareVersionLE, firmwareVersion)
 
-	emptyFirmware := bytes.Repeat([]byte{0xFF}, maxFirmwareSize)
+	emptyFirmwareHash := HashFirmware(firmwareVersion, []byte{})
 
-	doubleHash := func(b []byte) []byte {
-		first := sha256.Sum256(b)
-		second := sha256.Sum256(first[:])
-		return second[:]
-	}
-	emptyFirmwareHash := doubleHash(append(firmwareVersionLE, emptyFirmware...))
 	firmwareHash, _, err := device.GetHashes(false, false)
 	if err != nil {
 		return false, err
