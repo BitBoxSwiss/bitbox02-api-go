@@ -233,18 +233,12 @@ func (device *Device) flashUnsignedFirmware(firmware []byte, progressCallback fu
 // format is invalid, or the firmware magic does not match the expected magic according to the
 // device product.
 func (device *Device) parseSignedFirmware(firmware []byte) ([]byte, []byte, error) {
-	if len(firmware) <= magicLen+sigDataLen {
-		return nil, nil, errp.New("firmware too small")
+	product, sigData, firmware, err := ParseSignedFirmware(firmware)
+	if err != nil {
+		return nil, nil, err
 	}
-	magic, firmware := firmware[:magicLen], firmware[magicLen:]
-	sigData, firmware := firmware[:sigDataLen], firmware[sigDataLen:]
-
-	expectedMagic, ok := sigDataMagic[device.product]
-	if !ok {
-		return nil, nil, errp.New("unrecognized product")
-	}
-	if binary.BigEndian.Uint32(magic) != expectedMagic {
-		return nil, nil, errp.New("invalid signing pubkeys data magic")
+	if product != device.product {
+		return nil, nil, errp.New("signed firmware binary does not match device product")
 	}
 	return sigData, firmware, nil
 }
