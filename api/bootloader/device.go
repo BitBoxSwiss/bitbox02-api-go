@@ -17,7 +17,6 @@ package bootloader
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/binary"
 	"io"
 	"math"
@@ -234,18 +233,12 @@ func (device *Device) flashUnsignedFirmware(firmware []byte, progressCallback fu
 // format is invalid, or the firmware magic does not match the expected magic according to the
 // device product.
 func (device *Device) parseSignedFirmware(firmware []byte) ([]byte, []byte, error) {
-	if len(firmware) <= magicLen+sigDataLen {
-		return nil, nil, errp.New("firmware too small")
+	product, sigData, firmware, err := ParseSignedFirmware(firmware)
+	if err != nil {
+		return nil, nil, err
 	}
-	magic, firmware := firmware[:magicLen], firmware[magicLen:]
-	sigData, firmware := firmware[:sigDataLen], firmware[sigDataLen:]
-
-	expectedMagic, ok := sigDataMagic[device.product]
-	if !ok {
-		return nil, nil, errp.New("unrecognized product")
-	}
-	if binary.BigEndian.Uint32(magic) != expectedMagic {
-		return nil, nil, errp.New("invalid signing pubkeys data magic")
+	if product != device.product {
+		return nil, nil, errp.New("signed firmware binary does not match device product")
 	}
 	return sigData, firmware, nil
 }
@@ -309,17 +302,9 @@ func (device *Device) Erased() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	firmwareVersionLE := make([]byte, 4)
-	binary.LittleEndian.PutUint32(firmwareVersionLE, firmwareVersion)
 
-	emptyFirmware := bytes.Repeat([]byte{0xFF}, maxFirmwareSize)
+	emptyFirmwareHash := HashFirmware(firmwareVersion, []byte{})
 
-	doubleHash := func(b []byte) []byte {
-		first := sha256.Sum256(b)
-		second := sha256.Sum256(first[:])
-		return second[:]
-	}
-	emptyFirmwareHash := doubleHash(append(firmwareVersionLE, emptyFirmware...))
 	firmwareHash, _, err := device.GetHashes(false, false)
 	if err != nil {
 		return false, err
