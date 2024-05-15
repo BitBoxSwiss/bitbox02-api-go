@@ -40,8 +40,7 @@ func HashFirmware(firmwareVersion uint32, unsignedFirmware []byte) []byte {
 }
 
 // ParseSignedFirmware parses a signed firmware file and returns (sigdata, firmware). Errors if the
-// format is invalid, or the firmware magic does not match the expected magic according to the
-// device product.
+// format is invalid, or the firmware magic is not recognized.
 func ParseSignedFirmware(firmware []byte) (common.Product, []byte, []byte, error) {
 	if len(firmware) <= magicLen+sigDataLen {
 		return "", nil, nil, errp.New("firmware too small")
