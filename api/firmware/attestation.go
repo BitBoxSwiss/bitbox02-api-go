@@ -23,9 +23,9 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/BitBoxSwiss/bitbox02-api-go/util/errp"
+	"github.com/BitBoxSwiss/bitbox02-api-go/util/semver"
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/digitalbitbox/bitbox02-api-go/util/errp"
-	"github.com/digitalbitbox/bitbox02-api-go/util/semver"
 )
 
 type attestationPubkey struct {

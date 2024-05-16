@@ -18,8 +18,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/digitalbitbox/bitbox02-api-go/api/firmware/messages"
-	"github.com/digitalbitbox/bitbox02-api-go/util/errp"
+	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/messages"
+	"github.com/BitBoxSwiss/bitbox02-api-go/util/errp"
 )
 
 // ShowMnemonic lets the user export the bip39 mnemonic phrase on the device.

@@ -1,4 +1,4 @@
-module github.com/digitalbitbox/bitbox02-api-go
+module github.com/BitBoxSwiss/bitbox02-api-go
 
 go 1.13
 

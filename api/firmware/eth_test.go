@@ -17,7 +17,7 @@ package firmware
 import (
 	"testing"
 
-	"github.com/digitalbitbox/bitbox02-api-go/api/firmware/messages"
+	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/messages"
 	"github.com/stretchr/testify/require"
 )
 

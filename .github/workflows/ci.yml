@@ -26,7 +26,7 @@ jobs:
         with:
           go-version: ${{env.GO_VERSION}}
       # Keep the linter version and its config in .golangci.yml in sync with the app repo at
-      # https://github.com/digitalbitbox/bitbox-wallet-app/blob/98e815c25950dc7f55a27551d053239e6fd804ca/Makefile#L24
+      # https://github.com/BitBoxSwiss/bitbox-wallet-app/blob/98e815c25950dc7f55a27551d053239e6fd804ca/Makefile#L24
       - name: Install golangci-lint
         run: |
           curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \

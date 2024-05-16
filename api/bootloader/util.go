@@ -19,8 +19,8 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 
-	"github.com/digitalbitbox/bitbox02-api-go/api/common"
-	"github.com/digitalbitbox/bitbox02-api-go/util/errp"
+	"github.com/BitBoxSwiss/bitbox02-api-go/api/common"
+	"github.com/BitBoxSwiss/bitbox02-api-go/util/errp"
 )
 
 // HashFirmware returns the hash of `<firmware version><firmware>`, as computed by the bootloader to

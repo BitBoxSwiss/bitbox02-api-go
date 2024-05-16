@@ -24,6 +24,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/BitBoxSwiss/bitbox02-api-go/api/common"
+	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware"
+	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/messages"
+	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/mocks"
+	"github.com/BitBoxSwiss/bitbox02-api-go/communication/u2fhid"
 	"github.com/benma/miniscript-go"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
@@ -33,11 +38,6 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/digitalbitbox/bitbox02-api-go/api/common"
-	"github.com/digitalbitbox/bitbox02-api-go/api/firmware"
-	"github.com/digitalbitbox/bitbox02-api-go/api/firmware/messages"
-	"github.com/digitalbitbox/bitbox02-api-go/api/firmware/mocks"
-	"github.com/digitalbitbox/bitbox02-api-go/communication/u2fhid"
 	"github.com/karalabe/usb"
 )
 

@@ -15,7 +15,7 @@
 // Package common contains common functionality to firmware and bootloader of the bitbox02.
 package common
 
-import "github.com/digitalbitbox/bitbox02-api-go/util/errp"
+import "github.com/BitBoxSwiss/bitbox02-api-go/util/errp"
 
 // Product enumerates the BitBox-based products. A product is a "platform"-"edition" tuple. Together
 // with the firmware version, it determines the device API.

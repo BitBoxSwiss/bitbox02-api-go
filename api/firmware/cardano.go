@@ -15,8 +15,8 @@
 package firmware
 
 import (
-	"github.com/digitalbitbox/bitbox02-api-go/api/firmware/messages"
-	"github.com/digitalbitbox/bitbox02-api-go/util/errp"
+	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/messages"
+	"github.com/BitBoxSwiss/bitbox02-api-go/util/errp"
 )
 
 // queryCardano is like query, but nested one level deeper for Cardano.
