@@ -17,7 +17,7 @@ package firmware
 import (
 	"crypto/rand"
 
-	"github.com/digitalbitbox/bitbox02-api-go/util/errp"
+	"github.com/BitBoxSwiss/bitbox02-api-go/util/errp"
 )
 
 // bytesOrPanic returns random bytes of the given length or panics in case of an error.

@@ -20,7 +20,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/digitalbitbox/bitbox02-api-go/util/errp"
+	"github.com/BitBoxSwiss/bitbox02-api-go/util/errp"
 )
 
 // SemVer implements Semantic Versioning according to https://semver.org.

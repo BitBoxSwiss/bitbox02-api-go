@@ -21,7 +21,7 @@ import (
 	"testing"
 	"testing/quick"
 
-	"github.com/digitalbitbox/bitbox02-api-go/communication/usart"
+	"github.com/BitBoxSwiss/bitbox02-api-go/communication/usart"
 	"github.com/stretchr/testify/require"
 )
 

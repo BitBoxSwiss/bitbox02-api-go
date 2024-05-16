@@ -5,13 +5,13 @@ tagging versions.
 
 ## Comand to update the BitBox02 protobuf message files
 
-Clone the [BitBox02 firmware repo](https://github.com/digitalbitbox/bitbox02-firmware):
+Clone the [BitBox02 firmware repo](https://github.com/BitBoxSwiss/bitbox02-firmware):
 
 Make sure you have `protoc` and
 [protoc-gen-go](https://developers.google.com/protocol-buffers/docs/reference/go-generated)
 installed:
 
-`git clone https://github.com/digitalbitbox/bitbox02-firmware.git`
+`git clone https://github.com/BitBoxSwiss/bitbox02-firmware.git`
 
 ```sh
 rm -rf api/firmware/messages/{*.pb.go,*.proto}

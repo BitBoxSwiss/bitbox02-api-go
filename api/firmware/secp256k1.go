@@ -18,8 +18,8 @@ import (
 	"crypto/sha256"
 	"math/big"
 
+	"github.com/BitBoxSwiss/bitbox02-api-go/util/errp"
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/digitalbitbox/bitbox02-api-go/util/errp"
 )
 
 func taggedSha256(tag []byte, msg []byte) []byte {

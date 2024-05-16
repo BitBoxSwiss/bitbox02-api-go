@@ -25,11 +25,11 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/BitBoxSwiss/bitbox02-api-go/api/common"
+	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/mocks"
+	"github.com/BitBoxSwiss/bitbox02-api-go/util/semver"
 	"github.com/btcsuite/btcd/btcec/v2"
 	btcec_ecdsa "github.com/btcsuite/btcd/btcec/v2/ecdsa"
-	"github.com/digitalbitbox/bitbox02-api-go/api/common"
-	"github.com/digitalbitbox/bitbox02-api-go/api/firmware/mocks"
-	"github.com/digitalbitbox/bitbox02-api-go/util/semver"
 	"github.com/stretchr/testify/require"
 )
 

@@ -15,9 +15,9 @@
 package firmware
 
 import (
-	"github.com/digitalbitbox/bitbox02-api-go/api/firmware/messages"
-	"github.com/digitalbitbox/bitbox02-api-go/util/errp"
-	"github.com/digitalbitbox/bitbox02-api-go/util/semver"
+	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/messages"
+	"github.com/BitBoxSwiss/bitbox02-api-go/util/errp"
+	"github.com/BitBoxSwiss/bitbox02-api-go/util/semver"
 )
 
 // SetDeviceName sends a request to the device using protobuf to set the device name.

@@ -19,9 +19,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/digitalbitbox/bitbox02-api-go/api/firmware/messages"
-	"github.com/digitalbitbox/bitbox02-api-go/util/errp"
-	"github.com/digitalbitbox/bitbox02-api-go/util/semver"
+	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/messages"
+	"github.com/BitBoxSwiss/bitbox02-api-go/util/errp"
+	"github.com/BitBoxSwiss/bitbox02-api-go/util/semver"
 	"google.golang.org/protobuf/proto"
 )
 

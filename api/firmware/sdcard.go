@@ -15,8 +15,8 @@
 package firmware
 
 import (
-	"github.com/digitalbitbox/bitbox02-api-go/api/firmware/messages"
-	"github.com/digitalbitbox/bitbox02-api-go/util/errp"
+	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/messages"
+	"github.com/BitBoxSwiss/bitbox02-api-go/util/errp"
 )
 
 // CheckSDCard checks whether an sd card is inserted in the device.

@@ -19,7 +19,7 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/digitalbitbox/bitbox02-api-go/api/common"
+	"github.com/BitBoxSwiss/bitbox02-api-go/api/common"
 	"github.com/stretchr/testify/require"
 )
 

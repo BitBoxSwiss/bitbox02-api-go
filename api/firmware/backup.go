@@ -17,8 +17,8 @@ package firmware
 import (
 	"time"
 
-	"github.com/digitalbitbox/bitbox02-api-go/api/firmware/messages"
-	"github.com/digitalbitbox/bitbox02-api-go/util/errp"
+	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/messages"
+	"github.com/BitBoxSwiss/bitbox02-api-go/util/errp"
 )
 
 // CreateBackup is called after SetPassword() to create the backup.
