@@ -45,7 +45,7 @@ func errpanic(err error) {
 	}
 }
 
-func isBitBox02(deviceInfo usb.DeviceInfo) bool {
+func isBitBox02(deviceInfo *usb.DeviceInfo) bool {
 	return (deviceInfo.Product == common.FirmwareHIDProductStringStandard ||
 		deviceInfo.Product == common.FirmwareHIDProductStringBTCOnly) &&
 		deviceInfo.VendorID == bitbox02VendorID &&
@@ -172,10 +172,11 @@ func signFromTxID(device *firmware.Device, txID string) {
 }
 
 func main() {
-	deviceInfo := func() usb.DeviceInfo {
+	deviceInfo := func() *usb.DeviceInfo {
 		infos, err := usb.EnumerateHid(0, 0)
 		errpanic(err)
-		for _, di := range infos {
+		for idx := range infos {
+			di := &infos[idx]
 			if di.Serial == "" || di.Product == "" {
 				continue
 			}
@@ -186,6 +187,7 @@ func main() {
 		panic("could no find a bitbox02")
 
 	}()
+
 	hidDevice, err := deviceInfo.Open()
 	errpanic(err)
 	const bitboxCMD = 0x80 + 0x40 + 0x01
