@@ -55,7 +55,7 @@ func errpanic(err error) {
 	}
 }
 
-func isBitBox02(deviceInfo usb.DeviceInfo) bool {
+func isBitBox02(deviceInfo *usb.DeviceInfo) bool {
 	return (deviceInfo.Product == common.FirmwareHIDProductStringStandard ||
 		deviceInfo.Product == common.FirmwareHIDProductStringBTCOnly) &&
 		deviceInfo.VendorID == bitbox02VendorID &&
@@ -176,10 +176,11 @@ func (m multipath) derivationSuffix(isChange bool, addressIndex uint32) []uint32
 }
 
 func main() {
-	deviceInfo := func() usb.DeviceInfo {
+	deviceInfo := func() *usb.DeviceInfo {
 		infos, err := usb.EnumerateHid(0, 0)
 		errpanic(err)
-		for _, di := range infos {
+		for idx := range infos {
+			di := &infos[idx]
 			if di.Serial == "" || di.Product == "" {
 				continue
 			}
