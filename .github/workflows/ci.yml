@@ -54,7 +54,7 @@ jobs:
       - name: Test
         run: |
           go version
-          go test ./...
+          go test ./... -v
   build:
     runs-on: ubuntu-22.04
     steps:
