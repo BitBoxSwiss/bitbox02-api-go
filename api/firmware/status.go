@@ -24,7 +24,7 @@ const (
 	StatusConnected Status = "connected"
 
 	// StatusUnpaired means the pairing has not been confirmed yet. After the pairing screen has
-	// been confirmed, we move to StatusUninitialized or StatusInitialized depending on the device
+	// been confirmed, we move to StatusUninitialized or StatusUnlocked depending on the device
 	// status.
 	StatusUnpaired Status = "unpaired"
 
@@ -36,12 +36,12 @@ const (
 	StatusUninitialized Status = "uninitialized"
 
 	// StatusSeeded is after SetPassword(), before CreateBack() during initialization of the
-	// device. Use CreateBackup() to move to StatusInitialized.
+	// device. Use CreateBackup() to move to StatusUnlocked.
 	StatusSeeded Status = "seeded"
 
-	// StatusInitialized means the device is seeded and the backup was created, and the device is
+	// StatusUnlocked means the device is seeded and the backup was created, and the device is
 	// unlocked. The keystore is ready to use.
-	StatusInitialized Status = "initialized"
+	StatusUnlocked Status = "unlocked"
 
 	// StatusRequireFirmwareUpgrade means that the a firmware upgrade is required before being able
 	// to proceed to StatusLoggedIn or StatusSeeded (firmware version too old).

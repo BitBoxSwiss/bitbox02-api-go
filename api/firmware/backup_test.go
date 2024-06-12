@@ -38,7 +38,7 @@ func TestSimulatorBackups(t *testing.T) {
 		require.Error(t, err)
 
 		require.NoError(t, device.CreateBackup())
-		require.Equal(t, StatusInitialized, device.Status())
+		require.Equal(t, StatusUnlocked, device.Status())
 
 		list, err = device.ListBackups()
 		require.NoError(t, err)

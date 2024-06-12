@@ -87,7 +87,7 @@ func (device *Device) SetPassword(seedLen int) error {
 	if seedLen == 16 && !device.version.AtLeast(semver.NewSemVer(9, 6, 0)) {
 		return UnsupportedError("9.6.0")
 	}
-	if device.status == StatusInitialized {
+	if device.status == StatusUnlocked {
 		return errp.New("invalid status")
 	}
 	request := &messages.Request{

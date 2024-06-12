@@ -23,7 +23,7 @@ import (
 
 // CreateBackup is called after SetPassword() to create the backup.
 func (device *Device) CreateBackup() error {
-	if device.status != StatusSeeded && device.status != StatusInitialized {
+	if device.status != StatusSeeded && device.status != StatusUnlocked {
 		return errp.New("invalid status")
 	}
 
@@ -49,7 +49,7 @@ func (device *Device) CreateBackup() error {
 		return errp.New("unexpected response")
 	}
 	if device.status == StatusSeeded {
-		device.changeStatus(StatusInitialized)
+		device.changeStatus(StatusUnlocked)
 	}
 	return nil
 }
@@ -130,6 +130,6 @@ func (device *Device) RestoreBackup(id string) error {
 	if !ok {
 		return errp.New("unexpected response")
 	}
-	device.changeStatus(StatusInitialized)
+	device.changeStatus(StatusUnlocked)
 	return nil
 }

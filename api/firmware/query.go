@@ -37,7 +37,7 @@ const (
 	hwwReqRetry = "\x01"
 	// Cancel any outstanding request.
 	// hwwReqCancel = "\x02"
-	// INFO api call (used to be OP_INFO api call), graduated to the toplevel framing so it works
+	// REQ_INFO api call (used to be OP_INFO api call), graduated to the toplevel framing so it works
 	// the same way for all firmware versions.
 	hwwInfo = "i"
 
