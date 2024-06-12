@@ -39,8 +39,7 @@ const (
 	// device. Use CreateBackup() to move to StatusInitialized.
 	StatusSeeded Status = "seeded"
 
-	// StatusInitialized means the device is seeded and the backup was created, and the device is
-	// unlocked. The keystore is ready to use.
+	// StatusInitialized means the device is seeded and the backup was created.
 	StatusInitialized Status = "initialized"
 
 	// StatusRequireFirmwareUpgrade means that the a firmware upgrade is required before being able
