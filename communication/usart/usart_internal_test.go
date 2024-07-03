@@ -16,14 +16,14 @@ package usart
 
 import (
 	"encoding/hex"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestChecksum(t *testing.T) {
-	data, err := ioutil.ReadFile("testdata/chunk.bin")
+	data, err := os.ReadFile("testdata/chunk.bin")
 	require.NoError(t, err)
 	require.Equal(t, "4700", hex.EncodeToString(computeChecksum(data)))
 }

@@ -19,7 +19,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/bootloader"
@@ -184,7 +184,7 @@ func TestGetHashes(t *testing.T) {
 
 // TestSignedFirmwareVersion tests device.SignedFirmwareVersion.
 func TestSignedFirmwareVersion(t *testing.T) {
-	signedFirmware, err := ioutil.ReadFile("testdata/firmware-btc.v4.2.2.signed.bin")
+	signedFirmware, err := os.ReadFile("testdata/firmware-btc.v4.2.2.signed.bin")
 	if err != nil {
 		panic(err)
 	}
@@ -209,11 +209,11 @@ func TestSignedFirmwareVersion(t *testing.T) {
 // TestUpgradeFirmware tests a successful firmware upgrade with a real-world signed firmware
 // fixture.
 func TestUpgradeFirmware(t *testing.T) {
-	signedFirmware, err := ioutil.ReadFile("testdata/firmware-btc.v4.2.2.signed.bin")
+	signedFirmware, err := os.ReadFile("testdata/firmware-btc.v4.2.2.signed.bin")
 	if err != nil {
 		panic(err)
 	}
-	unsignedFirmware, err := ioutil.ReadFile("testdata/firmware-btc.v4.2.2.bin")
+	unsignedFirmware, err := os.ReadFile("testdata/firmware-btc.v4.2.2.bin")
 	if err != nil {
 		panic(err)
 	}
