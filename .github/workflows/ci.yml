@@ -47,6 +47,12 @@ jobs:
             ~/go/pkg
             ~/.cache/go-build
             ~/.cache/golangci-lint
+      - name: Enable simulators caching
+        uses: actions/cache@v4
+        with:
+          key: ${{runner.os}}-simulators-cache-${{hashFiles('./api/firmware/testdata/simulators.json')}}
+          path: |
+            ./api/firmware/testdata/simulators
       - name: Install Go
         uses: actions/setup-go@v4
         with:
