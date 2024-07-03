@@ -148,6 +148,7 @@ func main() {
 				},
 			}},
 			Outputs: []*messages.BTCSignOutputRequest{
+				// Address: tb1q2q0j6gmfxynj40p0kxsr9jkagcvgpuqvqynnup
 				{
 					Ours:                false,
 					Type:                messages.BTCOutputType_P2WPKH,
