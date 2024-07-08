@@ -13,7 +13,7 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/crypto v0.19.0
-	google.golang.org/protobuf v1.32.0
+	google.golang.org/protobuf v1.33.0
 )
 
 require (
