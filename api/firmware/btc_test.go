@@ -1,4 +1,5 @@
 // Copyright 2018-2019 Shift Cryptosecurity AG
+// Copyright 2024 Shift Crypto AG
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,11 +21,25 @@ import (
 
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/messages"
 	"github.com/BitBoxSwiss/bitbox02-api-go/util/semver"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
+	"github.com/btcsuite/btcd/btcutil/hdkeychain"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )
 
 const hardenedKeyStart = 0x80000000
+
+func parseECDSASignature(t *testing.T, sig []byte) *ecdsa.Signature {
+	t.Helper()
+	require.Len(t, sig, 64)
+	r := new(btcec.ModNScalar)
+	r.SetByteSlice(sig[:32])
+	s := new(btcec.ModNScalar)
+	s.SetByteSlice(sig[32:])
+	return ecdsa.NewSignature(r, s)
+}
 
 func TestNewXPub(t *testing.T) {
 	xpub, err := NewXPub(
@@ -39,7 +54,79 @@ func TestNewXPub(t *testing.T) {
 	}, xpub)
 }
 
-func TestBTCXPub(t *testing.T) {
+func TestBTCXpub(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device) {
+		t.Helper()
+		xpub, err := device.BTCXPub(messages.BTCCoin_TBTC, []uint32{
+			49 + hardenedKeyStart,
+			1 + hardenedKeyStart,
+			0 + hardenedKeyStart,
+		}, messages.BTCPubRequest_YPUB, false)
+		require.NoError(t, err)
+		require.Equal(t, "ypub6WqXiL3fbDK5QNPe3hN4uSVkEvuE8wXoNCcecgggSuKVpU3Kc4fTvhuLgUhtnbAdaTb9gpz5PQdvzcsKPTLgW2CPkF5ZNRzQeKFT4NSc1xN", xpub)
+	})
+}
+
+func TestBTCAddress(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device) {
+		t.Helper()
+		address, err := device.BTCAddress(
+			messages.BTCCoin_TBTC,
+			[]uint32{
+				84 + hardenedKeyStart,
+				1 + hardenedKeyStart,
+				0 + hardenedKeyStart,
+				1,
+				10,
+			},
+			NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH),
+			false,
+		)
+		require.NoError(t, err)
+		require.Equal(t, "tb1qq064dxjgl9h9wzgsmzy6t6306qew42w9ka02u3", address)
+	})
+}
+
+func parseXPub(t *testing.T, xpubStr string, keypath ...uint32) *hdkeychain.ExtendedKey {
+	t.Helper()
+	xpub, err := hdkeychain.NewKeyFromString(xpubStr)
+	require.NoError(t, err)
+
+	for _, child := range keypath {
+		xpub, err = xpub.Derive(child)
+		require.NoError(t, err)
+	}
+	return xpub
+}
+
+func TestSimulatorBTCSignMessage(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device) {
+		t.Helper()
+		coin := messages.BTCCoin_BTC
+		accountKeypath := []uint32{49 + hardenedKeyStart, 0 + hardenedKeyStart, 0 + hardenedKeyStart}
+
+		xpubStr, err := device.BTCXPub(coin, accountKeypath, messages.BTCPubRequest_XPUB, false)
+		require.NoError(t, err)
+
+		xpub := parseXPub(t, xpubStr, 0, 10)
+		pubKey, err := xpub.ECPubKey()
+		require.NoError(t, err)
+
+		sig, _, _, err := device.BTCSignMessage(
+			coin,
+			&messages.BTCScriptConfigWithKeypath{
+				ScriptConfig: NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH_P2SH),
+				Keypath:      append(accountKeypath, 0, 10),
+			},
+			[]byte("message"),
+		)
+		require.NoError(t, err)
+		sigHash := chainhash.DoubleHashB([]byte("\x18Bitcoin Signed Message:\n\x07message"))
+		require.True(t, parseECDSASignature(t, sig).Verify(sigHash, pubKey))
+	})
+}
+
+func TestSimulatorBTCXPub(t *testing.T) {
 	testConfigurations(t, func(t *testing.T, env *testEnv) {
 		t.Helper()
 		expected := "mocked-xpub"
@@ -110,7 +197,7 @@ func TestBTCXPub(t *testing.T) {
 	})
 }
 
-func TestBTCAddress(t *testing.T) {
+func TestSimulatorBTCAddress(t *testing.T) {
 	testConfigurations(t, func(t *testing.T, env *testEnv) {
 		t.Helper()
 		expected := "mocked-address"

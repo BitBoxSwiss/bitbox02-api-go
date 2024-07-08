@@ -11,9 +11,9 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Clone the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Enable caching
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           # Increment cache number to invalidate.
           key: ${{runner.os}}-cache-1
@@ -22,7 +22,7 @@ jobs:
             ~/.cache/go-build
             ~/.cache/golangci-lint
       - name: Install Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: ${{env.GO_VERSION}}
       # Keep the linter version and its config in .golangci.yml in sync with the app repo at
@@ -37,9 +37,9 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Clone the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Enable caching
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           # Increment cache number to invalidate.
           key: ${{runner.os}}-cache-1
@@ -47,21 +47,27 @@ jobs:
             ~/go/pkg
             ~/.cache/go-build
             ~/.cache/golangci-lint
+      - name: Enable simulators caching
+        uses: actions/cache@v4
+        with:
+          key: ${{runner.os}}-simulators-cache-${{hashFiles('./api/firmware/testdata/simulators.json')}}
+          path: |
+            ./api/firmware/testdata/simulators
       - name: Install Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: ${{env.GO_VERSION}}
       - name: Test
         run: |
           go version
-          go test ./...
+          go test ./... -v
   build:
     runs-on: ubuntu-22.04
     steps:
       - name: Clone the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Enable caching
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           # Increment cache number to invalidate.
           key: ${{runner.os}}-cache-1
@@ -70,7 +76,7 @@ jobs:
             ~/.cache/go-build
             ~/.cache/golangci-lint
       - name: Install Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: ${{env.GO_VERSION}}
       - name: Build

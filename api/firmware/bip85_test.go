@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Shift Cryptosecurity AG
+// Copyright 2024 Shift Crypto AG
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package usart
+package firmware
 
 import (
 	"encoding/hex"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestChecksum(t *testing.T) {
-	data, err := os.ReadFile("testdata/chunk.bin")
-	require.NoError(t, err)
-	require.Equal(t, "4700", hex.EncodeToString(computeChecksum(data)))
+func TestSimulatorBIP85AppBip39(t *testing.T) {
+	// Can't test this yet as the simulator panics at trinary_choice (12, 18, 24 word choice).
+	t.Skip()
+}
+
+func TestSimulatorBIP85AppLN(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device) {
+		t.Helper()
+		entropy, err := device.BIP85AppLN()
+		require.NoError(t, err)
+		require.Equal(t,
+			"d05448562b8b64994b7de7eac43cdc8a",
+			hex.EncodeToString(entropy))
+	})
 }

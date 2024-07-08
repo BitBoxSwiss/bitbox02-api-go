@@ -16,7 +16,7 @@ package bootloader
 
 import (
 	"encoding/hex"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/common"
@@ -27,7 +27,7 @@ func TestHashFirmware(t *testing.T) {
 	emptyHash := []byte("\xad\x27\x67\x91\x84\x74\xf3\x30\x02\x95\xb2\xef\x94\x9a\xe8\x13\xd7\x87\x0c\xed\x70\x30\x58\x29\xa0\x12\x91\xa4\x8f\x8b\xbc\x78")
 	require.Equal(t, emptyHash, HashFirmware(5, []byte{}))
 
-	unsignedFirmware, err := ioutil.ReadFile("testdata/firmware-btc.v4.2.2.bin")
+	unsignedFirmware, err := os.ReadFile("testdata/firmware-btc.v4.2.2.bin")
 	require.NoError(t, err)
 	require.Equal(t,
 		[]byte("\x9a\xfc\x65\xa1\x99\x6c\x0d\xfd\xbb\x17\x08\xbf\x51\x8d\x96\x8c\xde\xc7\xe3\xc3\x52\x56\x1e\x2b\x09\x1d\x91\x83\x6c\x06\x8a\xe5"),
@@ -36,10 +36,10 @@ func TestHashFirmware(t *testing.T) {
 }
 
 func TestParseSignedFirmmare(t *testing.T) {
-	unsignedFirmware, err := ioutil.ReadFile("testdata/firmware-btc.v4.2.2.bin")
+	unsignedFirmware, err := os.ReadFile("testdata/firmware-btc.v4.2.2.bin")
 	require.NoError(t, err)
 
-	signedFirmware, err := ioutil.ReadFile("testdata/firmware-btc.v4.2.2.signed.bin")
+	signedFirmware, err := os.ReadFile("testdata/firmware-btc.v4.2.2.signed.bin")
 	require.NoError(t, err)
 
 	product, sigData, firmware, err := ParseSignedFirmware(signedFirmware)

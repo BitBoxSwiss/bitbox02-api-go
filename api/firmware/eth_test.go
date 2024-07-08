@@ -19,7 +19,14 @@ import (
 
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/messages"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/sha3"
 )
+
+func hashKeccak(b []byte) []byte {
+	h := sha3.NewLegacyKeccak256()
+	h.Write(b)
+	return h.Sum(nil)
+}
 
 func parseTypeNoErr(t *testing.T, typ string, types map[string]interface{}) *messages.ETHSignTypedMessageRequest_MemberType {
 	t.Helper()
@@ -29,7 +36,6 @@ func parseTypeNoErr(t *testing.T, typ string, types map[string]interface{}) *mes
 }
 
 func TestParseType(t *testing.T) {
-
 	require.Equal(t,
 		&messages.ETHSignTypedMessageRequest_MemberType{
 			Type: messages.ETHSignTypedMessageRequest_STRING,
@@ -237,4 +243,153 @@ func TestEncodeValue(t *testing.T) {
 	encoded, err = encodeValue(parseTypeNoErr(t, "uint8[]", nil), make([]interface{}, 1000))
 	require.NoError(t, err)
 	require.Equal(t, []byte("\x00\x00\x03\xe8"), encoded)
+}
+
+func TestSimulatorETHPub(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device) {
+		t.Helper()
+		chainID := uint64(1)
+		xpub, err := device.ETHPub(
+			chainID,
+			[]uint32{
+				44 + hardenedKeyStart,
+				60 + hardenedKeyStart,
+				0 + hardenedKeyStart,
+				0,
+			},
+			messages.ETHPubRequest_XPUB,
+			false,
+			nil,
+		)
+		require.NoError(t, err)
+		require.Equal(t,
+			"xpub6F2rrkQ947NAvxGQdZPcw1fMHdnJMxXCPtGKWdmf1aaumRkaCoJF72yFYhKRmkbat27bhDy79FWndkS3skRNLgbsuuJKqBoFyUcrp5ZgmC3",
+			xpub,
+		)
+
+		address, err := device.ETHPub(
+			chainID,
+			[]uint32{
+				44 + hardenedKeyStart,
+				60 + hardenedKeyStart,
+				0 + hardenedKeyStart,
+				0,
+				1,
+			},
+			messages.ETHPubRequest_ADDRESS,
+			false,
+			nil,
+		)
+		require.NoError(t, err)
+		require.Equal(t,
+			"0x6A2A567cB891DeF8eA8C215C85f93d2f0F844ceB",
+			address,
+		)
+	})
+}
+
+func TestSimulatorETHSignMessage(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device) {
+		t.Helper()
+		chainID := uint64(1)
+		xpubStr, err := device.ETHPub(
+			chainID,
+			[]uint32{
+				44 + hardenedKeyStart,
+				60 + hardenedKeyStart,
+				0 + hardenedKeyStart,
+				0,
+			},
+			messages.ETHPubRequest_XPUB,
+			false,
+			nil,
+		)
+		require.NoError(t, err)
+
+		xpub := parseXPub(t, xpubStr, 10)
+		pubKey, err := xpub.ECPubKey()
+		require.NoError(t, err)
+
+		sig, err := device.ETHSignMessage(
+			chainID,
+			[]uint32{
+				44 + hardenedKeyStart,
+				60 + hardenedKeyStart,
+				0 + hardenedKeyStart,
+				0,
+				10,
+			},
+			[]byte("message"),
+		)
+		require.NoError(t, err)
+
+		sigHash := hashKeccak([]byte("\x19Ethereum Signed Message:\n7message"))
+		require.True(t, parseECDSASignature(t, sig[:64]).Verify(sigHash, pubKey))
+	})
+}
+
+func TestSimulatorETHSignTypedMessage(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device) {
+		t.Helper()
+		msg := []byte(`
+{
+    "types": {
+        "EIP712Domain": [
+            { "name": "name", "type": "string" },
+            { "name": "version", "type": "string" },
+            { "name": "chainId", "type": "uint256" },
+            { "name": "verifyingContract", "type": "address" }
+        ],
+        "Attachment": [
+            { "name": "contents", "type": "string" }
+        ],
+        "Person": [
+            { "name": "name", "type": "string" },
+            { "name": "wallet", "type": "address" },
+            { "name": "age", "type": "uint8" }
+        ],
+        "Mail": [
+            { "name": "from", "type": "Person" },
+            { "name": "to", "type": "Person" },
+            { "name": "contents", "type": "string" },
+            { "name": "attachments", "type": "Attachment[]" }
+        ]
+    },
+    "primaryType": "Mail",
+    "domain": {
+        "name": "Ether Mail",
+        "version": "1",
+        "chainId": 1,
+        "verifyingContract": "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"
+    },
+    "message": {
+        "from": {
+            "name": "Cow",
+            "wallet": "0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826",
+            "age": 20
+        },
+        "to": {
+            "name": "Bob",
+            "wallet": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+            "age": "0x1e"
+        },
+        "contents": "Hello, Bob!",
+        "attachments": [{ "contents": "attachment1" }, { "contents": "attachment2" }]
+    }
+}`)
+
+		sig, err := device.ETHSignTypedMessage(
+			1,
+			[]uint32{
+				44 + hardenedKeyStart,
+				60 + hardenedKeyStart,
+				0 + hardenedKeyStart,
+				0,
+				10,
+			},
+			msg,
+		)
+		require.NoError(t, err)
+		require.Len(t, sig, 65)
+	})
 }
