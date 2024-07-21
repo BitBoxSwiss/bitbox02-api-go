@@ -3,6 +3,7 @@ package firmware
 import (
 	"testing"
 
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/stretchr/testify/require"
 )
 
@@ -47,4 +48,23 @@ func TestAntikleptoVerify(t *testing.T) {
 		test.hostNonce[0]++
 		require.Error(t, antikleptoVerify(test.hostNonce, test.signerCommitment, test.signature))
 	}
+}
+
+func TestDLEQVerify(t *testing.T) {
+	// secret key sk=077eb75a52eca24cdedf058c92f1ca8b9d4841771fd6baa3d27885fb5b49fba2
+	// is the secret key in pubKey=sk*G and otherPubKey=sk*otherBase.
+	//
+	// Test fixture created by running dleq_verify() in
+	// https://github.com/BlockstreamResearch/secp256k1-zkp/blob/6152622613fdf1c5af6f31f74c427c4e9ee120ce/src/modules/ecdsa_adaptor/dleq_impl.h
+	// with the above secret key, p1 being sk*G,
+	// 0389140f7bb852f020f154e55908fe3699dc9f65153e681527f0d55aabed937f4b for gen2, and p2=sk*gen2.
+
+	proof := unhex("6c885f825f6ce7565bc6d0bfda90506b11e2682dfe943f5a85badf1c8a96edc5f5e03f5ee2c58bf979646fbada920f9f1c5bd92805fb5b01534b42d26a550f79")
+	pubKey, err := btcec.ParsePubKey(unhex("021b8594084a12da837a78f9337e3d29169025a8ddbe9f9933a131607c6e62d21e"))
+	require.NoError(t, err)
+	otherBase, err := btcec.ParsePubKey(unhex("0389140f7bb852f020f154e55908fe3699dc9f65153e681527f0d55aabed937f4b"))
+	require.NoError(t, err)
+	otherPubKey, err := btcec.ParsePubKey(unhex("03019807775b92c83d24e3001b55f60373e0bdc7d7cc7bc86befecf5bb987b54ac"))
+	require.NoError(t, err)
+	require.NoError(t, dleqVerify(proof, pubKey, otherBase, otherPubKey))
 }

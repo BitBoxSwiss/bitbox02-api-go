@@ -151,7 +151,7 @@ func signFromTxID(device *firmware.Device, txID string) {
 			Value:   outp.Value,
 		})
 	}
-	_, err := device.BTCSign(
+	_, _, err := device.BTCSign(
 		messages.BTCCoin_TBTC,
 		[]*messages.BTCScriptConfigWithKeypath{
 			{
