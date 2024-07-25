@@ -168,8 +168,15 @@ func testSimulators(t *testing.T, run func(*testing.T, *Device)) {
 		t.Skip("Skipping simulator tests: not running on linux-amd64")
 	}
 
-	simulatorFilenames, err := downloadSimulatorsOnce()
-	require.NoError(t, err)
+	var simulatorFilenames []string
+	envSimulator := os.Getenv("SIMULATOR")
+	if envSimulator != "" {
+		simulatorFilenames = []string{envSimulator}
+	} else {
+		var err error
+		simulatorFilenames, err = downloadSimulatorsOnce()
+		require.NoError(t, err)
+	}
 
 	for _, simulatorFilename := range simulatorFilenames {
 		t.Run(filepath.Base(simulatorFilename), func(t *testing.T) {
