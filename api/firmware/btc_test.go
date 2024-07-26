@@ -23,13 +23,25 @@ import (
 	"github.com/BitBoxSwiss/bitbox02-api-go/util/semver"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )
 
 const hardenedKeyStart = 0x80000000
+
+func mustOutpoint(s string) *wire.OutPoint {
+	outPoint, err := wire.NewOutPointFromString(s)
+	if err != nil {
+		panic(err)
+	}
+	return outPoint
+}
 
 func parseECDSASignature(t *testing.T, sig []byte) *ecdsa.Signature {
 	t.Helper()
@@ -87,36 +99,32 @@ func TestBTCAddress(t *testing.T) {
 	})
 }
 
-func parseXPub(t *testing.T, xpubStr string, keypath ...uint32) *hdkeychain.ExtendedKey {
+func simulatorPub(t *testing.T, device *Device, keypath ...uint32) *btcec.PublicKey {
 	t.Helper()
-	xpub, err := hdkeychain.NewKeyFromString(xpubStr)
+
+	xpubStr, err := device.BTCXPub(messages.BTCCoin_BTC, keypath, messages.BTCPubRequest_XPUB, false)
 	require.NoError(t, err)
 
-	for _, child := range keypath {
-		xpub, err = xpub.Derive(child)
-		require.NoError(t, err)
-	}
-	return xpub
+	xpub, err := hdkeychain.NewKeyFromString(xpubStr)
+	require.NoError(t, err)
+	pubKey, err := xpub.ECPubKey()
+	require.NoError(t, err)
+	return pubKey
 }
 
 func TestSimulatorBTCSignMessage(t *testing.T) {
 	testInitializedSimulators(t, func(t *testing.T, device *Device) {
 		t.Helper()
 		coin := messages.BTCCoin_BTC
-		accountKeypath := []uint32{49 + hardenedKeyStart, 0 + hardenedKeyStart, 0 + hardenedKeyStart}
+		keypath := []uint32{49 + hardenedKeyStart, 0 + hardenedKeyStart, 0 + hardenedKeyStart, 0, 10}
 
-		xpubStr, err := device.BTCXPub(coin, accountKeypath, messages.BTCPubRequest_XPUB, false)
-		require.NoError(t, err)
-
-		xpub := parseXPub(t, xpubStr, 0, 10)
-		pubKey, err := xpub.ECPubKey()
-		require.NoError(t, err)
+		pubKey := simulatorPub(t, device, keypath...)
 
 		sig, _, _, err := device.BTCSignMessage(
 			coin,
 			&messages.BTCScriptConfigWithKeypath{
 				ScriptConfig: NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH_P2SH),
-				Keypath:      append(accountKeypath, 0, 10),
+				Keypath:      keypath,
 			},
 			[]byte("message"),
 		)
@@ -319,5 +327,243 @@ func TestBTCSignMessage(t *testing.T) {
 		} else {
 			require.EqualError(t, err, UnsupportedError("9.2.0").Error())
 		}
+	})
+}
+
+func makeTaprootOutput(t *testing.T, pubkey *btcec.PublicKey) []byte {
+	t.Helper()
+	outputKey := txscript.ComputeTaprootKeyNoScript(pubkey)
+	outputPkScript, err := txscript.PayToTaprootScript(outputKey)
+	require.NoError(t, err)
+	return outputPkScript
+}
+
+// Test signing; all inputs are BIP86 Taproot keyspends.
+func TestSimulatorBTCSignTaprootKeySpend(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device) {
+		t.Helper()
+		coin := messages.BTCCoin_BTC
+		accountKeypath := []uint32{86 + hardenedKeyStart, 0 + hardenedKeyStart, 0 + hardenedKeyStart}
+		inputKeypath := []uint32{86 + hardenedKeyStart, 0 + hardenedKeyStart, 0 + hardenedKeyStart, 0, 0}
+		input2Keypath := []uint32{86 + hardenedKeyStart, 0 + hardenedKeyStart, 0 + hardenedKeyStart, 0, 1}
+		changeKeypath := []uint32{86 + hardenedKeyStart, 0 + hardenedKeyStart, 0 + hardenedKeyStart, 1, 0}
+
+		input1PkScript := makeTaprootOutput(t, simulatorPub(t, device, inputKeypath...))
+		input2PkScript := makeTaprootOutput(t, simulatorPub(t, device, input2Keypath...))
+
+		prevTx := &wire.MsgTx{
+			Version: 2,
+			TxIn: []*wire.TxIn{
+				{
+					PreviousOutPoint: *mustOutpoint("3131313131313131313131313131313131313131313131313131313131313131:0"),
+					Sequence:         0xFFFFFFFF,
+				},
+			},
+			TxOut: []*wire.TxOut{
+				{
+					Value:    60_000_000,
+					PkScript: input1PkScript,
+				},
+				{
+					Value:    40_000_000,
+					PkScript: input2PkScript,
+				},
+			},
+			LockTime: 0,
+		}
+
+		scriptConfigs := []*messages.BTCScriptConfigWithKeypath{
+			{
+				ScriptConfig: NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2TR),
+				Keypath:      accountKeypath,
+			},
+		}
+		require.False(t, BTCSignNeedsPrevTxs(scriptConfigs))
+
+		prevTxHash := prevTx.TxHash()
+		_, err := device.BTCSign(
+			coin,
+			scriptConfigs,
+			&BTCTx{
+				Version: 2,
+				Inputs: []*BTCTxInput{
+					{
+						Input: &messages.BTCSignInputRequest{
+							PrevOutHash:       prevTxHash[:],
+							PrevOutIndex:      0,
+							PrevOutValue:      uint64(prevTx.TxOut[0].Value),
+							Sequence:          0xFFFFFFFF,
+							Keypath:           inputKeypath,
+							ScriptConfigIndex: 0,
+						},
+					},
+					{
+						Input: &messages.BTCSignInputRequest{
+							PrevOutHash:       prevTxHash[:],
+							PrevOutIndex:      1,
+							PrevOutValue:      uint64(prevTx.TxOut[1].Value),
+							Sequence:          0xFFFFFFFF,
+							Keypath:           input2Keypath,
+							ScriptConfigIndex: 0,
+						},
+					},
+				},
+				Outputs: []*messages.BTCSignOutputRequest{
+					{
+						Ours:    true,
+						Value:   70_000_000,
+						Keypath: changeKeypath,
+					},
+					{
+						Value:   20_000_000,
+						Payload: []byte("11111111111111111111111111111111"),
+						Type:    messages.BTCOutputType_P2WSH,
+					},
+				},
+				Locktime: 0,
+			},
+			messages.BTCSignInitRequest_DEFAULT,
+		)
+		require.NoError(t, err)
+	})
+}
+
+// Test signing; mixed input types (p2wpkh, p2wpkh-p2sh, p2tr)
+func TestSimulatorBTCSignMixed(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device) {
+		t.Helper()
+		coin := messages.BTCCoin_BTC
+		changeKeypath := []uint32{86 + hardenedKeyStart, 0 + hardenedKeyStart, 0 + hardenedKeyStart, 1, 0}
+		input0Keypath := []uint32{86 + hardenedKeyStart, 0 + hardenedKeyStart, 0 + hardenedKeyStart, 0, 0}
+		input1Keypath := []uint32{84 + hardenedKeyStart, 0 + hardenedKeyStart, 0 + hardenedKeyStart, 0, 0}
+		input2Keypath := []uint32{49 + hardenedKeyStart, 0 + hardenedKeyStart, 0 + hardenedKeyStart, 0, 0}
+
+		net := &chaincfg.MainNetParams
+
+		prevTx := &wire.MsgTx{
+			Version: 2,
+			TxIn: []*wire.TxIn{
+				{
+					PreviousOutPoint: *mustOutpoint("3131313131313131313131313131313131313131313131313131313131313131:0"),
+					Sequence:         0xFFFFFFFF,
+				},
+			},
+			TxOut: []*wire.TxOut{
+				{
+					Value: 100_000_000,
+					PkScript: func() []byte {
+						return makeTaprootOutput(t, simulatorPub(t, device, input0Keypath...))
+					}(),
+				},
+				{
+					Value: 100_000_000,
+					PkScript: func() []byte {
+						inputPub := simulatorPub(t, device, input1Keypath...)
+
+						publicKeyHash := btcutil.Hash160(inputPub.SerializeCompressed())
+						address, err := btcutil.NewAddressWitnessPubKeyHash(publicKeyHash, net)
+						require.NoError(t, err)
+						pkScript, err := txscript.PayToAddrScript(address)
+						require.NoError(t, err)
+						return pkScript
+					}(),
+				},
+				{
+					Value: 100_000_000,
+					PkScript: func() []byte {
+						inputPub := simulatorPub(t, device, input2Keypath...)
+						publicKeyHash := btcutil.Hash160(inputPub.SerializeCompressed())
+
+						segwitAddress, err := btcutil.NewAddressWitnessPubKeyHash(publicKeyHash, net)
+						require.NoError(t, err)
+						redeemScript, err := txscript.PayToAddrScript(segwitAddress)
+						require.NoError(t, err)
+						address, err := btcutil.NewAddressScriptHash(redeemScript, net)
+						require.NoError(t, err)
+						pkScript, err := txscript.PayToAddrScript(address)
+						require.NoError(t, err)
+						return pkScript
+					}(),
+				},
+			},
+			LockTime: 0,
+		}
+		convertedPrevTx := NewBTCPrevTxFromBtcd(prevTx)
+
+		scriptConfigs := []*messages.BTCScriptConfigWithKeypath{
+			{
+				ScriptConfig: NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2TR),
+				Keypath:      input0Keypath[:3],
+			},
+			{
+				ScriptConfig: NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH),
+				Keypath:      input1Keypath[:3],
+			},
+
+			{
+				ScriptConfig: NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH_P2SH),
+				Keypath:      input2Keypath[:3],
+			},
+		}
+		require.True(t, BTCSignNeedsPrevTxs(scriptConfigs))
+
+		prevTxHash := prevTx.TxHash()
+		_, err := device.BTCSign(
+			coin,
+			scriptConfigs,
+			&BTCTx{
+				Version: 2,
+				Inputs: []*BTCTxInput{
+					{
+						Input: &messages.BTCSignInputRequest{
+							PrevOutHash:       prevTxHash[:],
+							PrevOutIndex:      0,
+							PrevOutValue:      uint64(prevTx.TxOut[0].Value),
+							Sequence:          0xFFFFFFFF,
+							Keypath:           input0Keypath,
+							ScriptConfigIndex: 0,
+						},
+						PrevTx: convertedPrevTx,
+					},
+					{
+						Input: &messages.BTCSignInputRequest{
+							PrevOutHash:       prevTxHash[:],
+							PrevOutIndex:      1,
+							PrevOutValue:      uint64(prevTx.TxOut[1].Value),
+							Sequence:          0xFFFFFFFF,
+							Keypath:           input1Keypath,
+							ScriptConfigIndex: 1,
+						},
+						PrevTx: convertedPrevTx,
+					},
+					{
+						Input: &messages.BTCSignInputRequest{
+							PrevOutHash:       prevTxHash[:],
+							PrevOutIndex:      2,
+							PrevOutValue:      uint64(prevTx.TxOut[2].Value),
+							Sequence:          0xFFFFFFFF,
+							Keypath:           input2Keypath,
+							ScriptConfigIndex: 2,
+						},
+						PrevTx: convertedPrevTx,
+					},
+				},
+				Outputs: []*messages.BTCSignOutputRequest{
+					{
+						Ours:    true,
+						Value:   270_000_000,
+						Keypath: changeKeypath,
+					},
+					{
+						Value:   20_000_000,
+						Payload: []byte("11111111111111111111111111111111"),
+						Type:    messages.BTCOutputType_P2WSH,
+					},
+				},
+				Locktime: 0,
+			},
+			messages.BTCSignInitRequest_DEFAULT,
+		)
+		require.NoError(t, err)
 	})
 }
