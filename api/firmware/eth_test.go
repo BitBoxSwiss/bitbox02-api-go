@@ -292,33 +292,18 @@ func TestSimulatorETHSignMessage(t *testing.T) {
 	testInitializedSimulators(t, func(t *testing.T, device *Device) {
 		t.Helper()
 		chainID := uint64(1)
-		xpubStr, err := device.ETHPub(
-			chainID,
-			[]uint32{
-				44 + hardenedKeyStart,
-				60 + hardenedKeyStart,
-				0 + hardenedKeyStart,
-				0,
-			},
-			messages.ETHPubRequest_XPUB,
-			false,
-			nil,
-		)
-		require.NoError(t, err)
-
-		xpub := parseXPub(t, xpubStr, 10)
-		pubKey, err := xpub.ECPubKey()
-		require.NoError(t, err)
+		keypath := []uint32{
+			44 + hardenedKeyStart,
+			60 + hardenedKeyStart,
+			0 + hardenedKeyStart,
+			0,
+			10,
+		}
+		pubKey := simulatorPub(t, device, keypath...)
 
 		sig, err := device.ETHSignMessage(
 			chainID,
-			[]uint32{
-				44 + hardenedKeyStart,
-				60 + hardenedKeyStart,
-				0 + hardenedKeyStart,
-				0,
-				10,
-			},
+			keypath,
 			[]byte("message"),
 		)
 		require.NoError(t, err)
