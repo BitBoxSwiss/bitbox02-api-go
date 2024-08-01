@@ -132,10 +132,10 @@ type info struct {
 //
 //	Can be given if known at the time of instantiation, e.g. by parsing the USB HID product string.
 //	It must be provided if the version could be less than 4.3.0.
-//	If nil, the version will be queried from the device using the OP_INFO api endpoint. Do this
+//	If nil, the version will be queried from the device using the REQ_INFO api endpoint. Do this
 //	when you are sure the firmware version is bigger or equal to 4.3.0.
 //
-// product: same deal as with the version, after 4.3.0 it can be inferred by OP_INFO.
+// product: same deal as with the version, after 4.3.0 it can be inferred by REQ_INFO.
 func NewDevice(
 	version *semver.SemVer,
 	product *common.Product,
@@ -232,13 +232,13 @@ func (device *Device) Version() *semver.SemVer {
 	return device.version
 }
 
-// inferVersionAndProduct either sets the version and product by using OP_INFO if they were not
-// provided. In this case, the firmware is assumed to be >=v4.3.0, before that OP_INFO was not
+// inferVersionAndProduct either sets the version and product by using REQ_INFO if they were not
+// provided. In this case, the firmware is assumed to be >=v4.3.0, before that REQ_INFO was not
 // available.
 func (device *Device) inferVersionAndProduct(version *semver.SemVer, product common.Product) {
-	// The version has not been provided, so we try to get it from OP_INFO.
+	// The version has not been provided, so we try to get it from REQ_INFO.
 	if device.version == nil {
-		device.log.Info(fmt.Sprintf("OP_INFO: version=%s, product=%s", version, product))
+		device.log.Info(fmt.Sprintf("REQ_INFO: version=%s, product=%s", version, product))
 		device.version = version
 		device.product = &product
 	}
@@ -263,7 +263,7 @@ func (device *Device) Init() error {
 		deviceInfo, err := device.info()
 		if err != nil {
 			return errp.New(
-				"OP_INFO unavailable; need to provide version and product via the USB HID descriptor")
+				"REQ_INFO unavailable; need to provide version and product via the USB HID descriptor")
 		}
 		// Does nothing if device.version == nil
 		device.inferVersionAndProduct(deviceInfo.version, deviceInfo.product)
