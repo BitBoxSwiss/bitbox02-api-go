@@ -17,7 +17,6 @@ package firmware
 import (
 	"testing"
 
-	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/messages"
 	"github.com/stretchr/testify/require"
 )
 
@@ -31,12 +30,9 @@ func TestSimulatorCheckSDCard(t *testing.T) {
 	})
 }
 
-func TestSimutorInsertRemoveSDCard(t *testing.T) {
+func TestSimutorInsertSDCard(t *testing.T) {
 	testSimulatorsAfterPairing(t, func(t *testing.T, device *Device) {
 		t.Helper()
-		require.NoError(t,
-			device.InsertRemoveSDCard(messages.InsertRemoveSDCardRequest_INSERT_CARD))
-		require.NoError(t,
-			device.InsertRemoveSDCard(messages.InsertRemoveSDCardRequest_REMOVE_CARD))
+		require.NoError(t, device.InsertSDCard())
 	})
 }
