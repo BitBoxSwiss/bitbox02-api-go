@@ -16,8 +16,12 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"hash"
 	"log"
 
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/common"
@@ -25,6 +29,9 @@ import (
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/messages"
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/mocks"
 	"github.com/BitBoxSwiss/bitbox02-api-go/communication/u2fhid"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/karalabe/usb"
 )
 
@@ -56,6 +63,47 @@ func isBitBox02(deviceInfo *usb.DeviceInfo) bool {
 		deviceInfo.VendorID == bitbox02VendorID &&
 		deviceInfo.ProductID == bitbox02ProductID &&
 		(deviceInfo.UsagePage == 0xffff || deviceInfo.Interface == 0)
+}
+
+func hashDataLenPrefixed(hasher hash.Hash, data []byte) {
+	_ = wire.WriteVarInt(hasher, 0, uint64(len(data)))
+	hasher.Write(data)
+}
+
+func computeSighash(paymentRequest *messages.BTCPaymentRequestRequest, slip44 uint32, outputValue uint64, outputAddress string) ([]byte, error) {
+	sighash := sha256.New()
+
+	// versionMagic
+	sighash.Write([]byte("SL\x00\x24"))
+
+	// nonce
+	hashDataLenPrefixed(sighash, paymentRequest.Nonce)
+
+	// recipientName
+	hashDataLenPrefixed(sighash, []byte(paymentRequest.RecipientName))
+
+	// memos
+	_ = wire.WriteVarInt(sighash, 0, uint64(len(paymentRequest.Memos)))
+	for _, memo := range paymentRequest.Memos {
+		switch m := memo.Memo.(type) {
+		case *messages.BTCPaymentRequestRequest_Memo_TextMemo_:
+			_ = binary.Write(sighash, binary.LittleEndian, uint32(1))
+			hashDataLenPrefixed(sighash, []byte(m.TextMemo.Note))
+		default:
+			return nil, errors.New("unsupported memo type")
+		}
+	}
+
+	// coinType
+	_ = binary.Write(sighash, binary.LittleEndian, slip44)
+
+	// outputsHash (only one output for now)
+	outputHasher := sha256.New()
+	_ = binary.Write(outputHasher, binary.LittleEndian, outputValue)
+	hashDataLenPrefixed(outputHasher, []byte(outputAddress))
+	sighash.Write(outputHasher.Sum(nil))
+
+	return sighash.Sum(nil), nil
 }
 
 func main() {
@@ -90,7 +138,7 @@ func main() {
 	value := uint64(123456)
 	paymentRequestIndex := uint32(0)
 
-	// Manually created. To test with a real device, modify and compile/use a firmware where "Test
+	// To test with a real device, modify and compile/use a firmware where "Test
 	// Merchant" (private key "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") is included in the identities in
 	// payment_request.rs.
 	paymentRequest := &messages.BTCPaymentRequestRequest{
@@ -99,15 +147,23 @@ func main() {
 			{
 				Memo: &messages.BTCPaymentRequestRequest_Memo_TextMemo_{
 					TextMemo: &messages.BTCPaymentRequestRequest_Memo_TextMemo{
-						Note: "TextMemo",
+						Note: "TextMemo line1\nTextMemo line2",
 					},
 				},
 			},
 		},
 		Nonce:       nil,
 		TotalAmount: value,
-		Signature:   unhex("b719cf98cc8a0f9191d4be1a6609037b5b084674d8e64b13199408813459a1b3033ff58c6468b35acc4ded661c8e23348823887046c778e6eba2e5b9586b9a25"),
 	}
+
+	// Sign the payment request.
+	sighash, err := computeSighash(paymentRequest, 1, value, "tb1q2q0j6gmfxynj40p0kxsr9jkagcvgpuqvqynnup")
+	errpanic(err)
+	privKey, _ := btcec.PrivKeyFromBytes([]byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+	errpanic(err)
+	signature, err := ecdsa.SignCompact(privKey, sighash, true)
+	errpanic(err)
+	paymentRequest.Signature = signature[1:]
 
 	_, err = device.BTCSign(
 		messages.BTCCoin_TBTC,
