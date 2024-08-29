@@ -15,6 +15,7 @@
 package firmware
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/messages"
@@ -376,5 +377,77 @@ func TestSimulatorETHSignTypedMessage(t *testing.T) {
 		)
 		require.NoError(t, err)
 		require.Len(t, sig, 65)
+	})
+}
+
+func TestSimulatorETHSign(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device) {
+		t.Helper()
+		chainID := uint64(1)
+		keypath := []uint32{
+			44 + hardenedKeyStart,
+			60 + hardenedKeyStart,
+			0 + hardenedKeyStart,
+			0,
+			10,
+		}
+		nonce := uint64(8156)
+		gasPrice := new(big.Int).SetUint64(6000000000)
+		gasLimit := uint64(21000)
+		recipient := [20]byte{0x04, 0xf2, 0x64, 0xcf, 0x34, 0x44, 0x03, 0x13, 0xb4, 0xa0,
+			0x19, 0x2a, 0x35, 0x28, 0x14, 0xfb, 0xe9, 0x27, 0xb8, 0x85}
+		value := new(big.Int).SetUint64(530564000000000000)
+
+		sig, err := device.ETHSign(
+			chainID,
+			keypath,
+			nonce,
+			gasPrice,
+			gasLimit,
+			recipient,
+			value,
+			nil,
+			messages.ETHAddressCase_ETH_ADDRESS_CASE_MIXED,
+		)
+		require.NoError(t, err)
+
+		require.Len(t, sig, 65, "The signature should have exactly 65 bytes")
+	})
+}
+
+func TestSimulatorETHSignEIP1559(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device) {
+		t.Helper()
+		chainID := uint64(1)
+		keypath := []uint32{
+			44 + hardenedKeyStart,
+			60 + hardenedKeyStart,
+			0 + hardenedKeyStart,
+			0,
+			10,
+		}
+		nonce := uint64(8156)
+		maxPriorityFeePerGas := new(big.Int)
+		maxFeePerGas := new(big.Int).SetUint64(6000000000)
+		gasLimit := uint64(21000)
+		recipient := [20]byte{0x04, 0xf2, 0x64, 0xcf, 0x34, 0x44, 0x03, 0x13, 0xb4, 0xa0,
+			0x19, 0x2a, 0x35, 0x28, 0x14, 0xfb, 0xe9, 0x27, 0xb8, 0x85}
+		value := new(big.Int).SetUint64(530564000000000000)
+
+		sig, err := device.ETHSignEIP1559(
+			chainID,
+			keypath,
+			nonce,
+			maxPriorityFeePerGas,
+			maxFeePerGas,
+			gasLimit,
+			recipient,
+			value,
+			nil,
+			messages.ETHAddressCase_ETH_ADDRESS_CASE_MIXED,
+		)
+		require.NoError(t, err)
+
+		require.Len(t, sig, 65, "The signature should have exactly 65 bytes")
 	})
 }
