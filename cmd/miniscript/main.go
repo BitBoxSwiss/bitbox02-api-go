@@ -329,7 +329,7 @@ func main() {
 		}
 		accountKeypath := keyOriginInfo.Keypath
 		mp := multipaths[i]
-		signatures, err := device.BTCSign(
+		signatures, _, err := device.BTCSign(
 			coin,
 			[]*messages.BTCScriptConfigWithKeypath{
 				{
