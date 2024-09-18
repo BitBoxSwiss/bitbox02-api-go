@@ -667,7 +667,7 @@ func TestSimulatorBTCSignSilentPayment(t *testing.T) {
 				generatedOutputs,
 			)
 		} else {
-			require.Error(t, err)
+			require.EqualError(t, err, UnsupportedError("9.21.0").Error())
 		}
 	})
 }

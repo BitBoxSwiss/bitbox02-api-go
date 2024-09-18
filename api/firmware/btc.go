@@ -306,6 +306,10 @@ func (device *Device) BTCSign(
 		}
 	}
 
+	if containsSilentPaymentOutputs && !device.version.AtLeast(semver.NewSemVer(9, 21, 0)) {
+		return nil, nil, UnsupportedError("9.21.0")
+	}
+
 	signatures := make([][]byte, len(tx.Inputs))
 	next, err := device.queryBtcSign(&messages.Request{
 		Request: &messages.Request_BtcSignInit{
