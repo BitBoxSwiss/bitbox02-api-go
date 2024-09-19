@@ -9,7 +9,7 @@ require (
 	github.com/btcsuite/btcd/btcutil v1.1.6
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0
 	github.com/flynn/noise v1.1.0
-	github.com/karalabe/usb v0.0.0-20191104083709-911d15fe12a9
+	github.com/karalabe/hid v1.0.1-0.20240306101548-573246063e52
 	github.com/pkg/errors v0.8.1
 	github.com/stretchr/testify v1.9.0
 	golang.org/x/crypto v0.27.0
