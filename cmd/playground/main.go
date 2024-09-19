@@ -29,7 +29,7 @@ import (
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/messages"
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/mocks"
 	"github.com/BitBoxSwiss/bitbox02-api-go/communication/u2fhid"
-	"github.com/karalabe/usb"
+	"github.com/karalabe/hid"
 )
 
 const (
@@ -45,7 +45,7 @@ func errpanic(err error) {
 	}
 }
 
-func isBitBox02(deviceInfo *usb.DeviceInfo) bool {
+func isBitBox02(deviceInfo *hid.DeviceInfo) bool {
 	return (deviceInfo.Product == common.FirmwareHIDProductStringStandard ||
 		deviceInfo.Product == common.FirmwareHIDProductStringBTCOnly) &&
 		deviceInfo.VendorID == bitbox02VendorID &&
@@ -172,8 +172,8 @@ func signFromTxID(device *firmware.Device, txID string) {
 }
 
 func main() {
-	deviceInfo := func() *usb.DeviceInfo {
-		infos, err := usb.EnumerateHid(0, 0)
+	deviceInfo := func() *hid.DeviceInfo {
+		infos, err := hid.Enumerate(0, 0)
 		errpanic(err)
 		for idx := range infos {
 			di := &infos[idx]
