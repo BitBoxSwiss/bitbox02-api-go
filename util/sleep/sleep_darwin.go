@@ -49,7 +49,7 @@ func Prevent() {
 	C.preventSleep()
 }
 
-// Allow allows macOS from going to sleep.
+// Allow allows macOS to go to sleep.
 func Allow() {
 	C.allowSleep()
 }
