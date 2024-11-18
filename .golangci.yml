@@ -17,9 +17,6 @@ run:
 
 # output configuration options
 output:
-  # colored-line-number|line-number|json|tab|checkstyle, default is "colored-line-number"
-  format: colored-line-number
-
   # print lines of code with issue, default is true
   print-issued-lines: true
 
@@ -31,28 +28,11 @@ output:
 linters-settings:
   gocritic:
     enabled-checks:
-      - assignOp
       - builtinShadow
-      - captLocal
-      - caseOrder
-      - defaultCaseOrder
-      - dupArg
-      - dupBranchBody
-      - dupCase
-      - elseif
-      - flagDeref
-      - ifElseChain
       - nilValReturn
       - rangeExprCopy
       - rangeValCopy
-      - regexpMust
-      - sloppyLen
-      - switchTrue
-      - typeSwitchVar
       - typeUnparen
-      - underef
-      - unlambda
-      - unslice
   gocyclo:
     min-complexity: 29
   maligned:
@@ -81,9 +61,6 @@ linters-settings:
 linters:
   enable-all: true
   disable:
-    - golint
-    - scopelint
-    - interfacer
     - gosec
     - bodyclose
     - dogsled
@@ -93,17 +70,14 @@ linters:
     - gochecknoinits
     - gocognit
     - godox
-    - goerr113 # can't switch to errors.Is due to GopherJS still on go1.12
-    - gomnd
     - lll
-    - maligned
     - nestif
     - prealloc
     - stylecheck
     - whitespace
     - wsl
-    - execinquery
     - ireturn
+    - err113
     - wrapcheck
     - varnamelen
     - tagliatelle
@@ -112,12 +86,10 @@ linters:
     - noctx
     - nlreturn
     - cyclop
-    - ifshort
     - exhaustive
     - nilnil
     - nilerr
     - forcetypeassert
-    - exhaustivestruct
     - exhaustruct
     - maintidx
     - errorlint
@@ -128,19 +100,16 @@ linters:
     - makezero
     - nolintlint
     - gocyclo
-    - nosnakecase
     - interfacebloat
     - revive
     - musttag
-    - structcheck
-    - deadcode
-    - varcheck
     - depguard
     - protogetter
     - gosmopolitan
     - inamedparam
     # could not find a way to disable float-compare: https://github.com/golangci/golangci-lint/issues/4187
     - testifylint
+    - mnd
   disable-all: false
 
 issues:

@@ -95,7 +95,6 @@ func TestReadWrite(t *testing.T) {
 
 func TestWrite(t *testing.T) {
 	for _, test := range tests {
-		test := test
 		t.Run("", func(t *testing.T) {
 			buf := new(bytes.Buffer)
 			err := usart.NewCommunication(
@@ -110,7 +109,6 @@ func TestWrite(t *testing.T) {
 
 func TestRead(t *testing.T) {
 	for _, test := range tests {
-		test := test
 		t.Run("", func(t *testing.T) {
 			communication := usart.NewCommunication(
 				&deviceMock{

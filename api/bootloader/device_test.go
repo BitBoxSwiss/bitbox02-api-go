@@ -126,7 +126,6 @@ func TestVersions(t *testing.T) {
 			"x\x00aaaaaaaa", // wrong cmd, good len
 			"v\x01aaaaaaaa", // wrong op status
 		} {
-			testResponse := testResponse
 			env.communication.query = func([]byte) ([]byte, error) {
 				return []byte(testResponse), nil
 			}
@@ -149,7 +148,6 @@ func TestGetHashes(t *testing.T) {
 			{true, false, "h\x01\x00"},
 			{true, true, "h\x01\x01"},
 		} {
-			test := test
 			t.Run("happy", func(t *testing.T) {
 				h1 := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 				h2 := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
@@ -279,7 +277,7 @@ func TestUpgradeFirmware(t *testing.T) {
 		require.Equal(t, []byte("ed"), msg)
 
 		// flash chunks
-		for chunkIndex := 0; chunkIndex < numChunks; chunkIndex++ {
+		for chunkIndex := range numChunks {
 			msg, status = takeOne()
 
 			require.True(t, status.Upgrading)
