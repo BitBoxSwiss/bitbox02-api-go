@@ -52,7 +52,7 @@ func runSimulator(filename string) (func() error, *Device, error) {
 	}
 	var conn net.Conn
 	var err error
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		conn, err = net.Dial("tcp", "localhost:15423")
 		if err == nil {
 			break
