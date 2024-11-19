@@ -175,7 +175,7 @@ func (device *Device) ChannelHashVerify(ok bool) {
 			return
 		}
 		if info.Initialized {
-			device.changeStatus(StatusInitialized)
+			device.changeStatus(StatusUnlocked)
 		} else {
 			device.changeStatus(StatusUninitialized)
 		}

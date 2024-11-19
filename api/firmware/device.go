@@ -114,15 +114,28 @@ type DeviceInfo struct {
 	SecurechipModel string `json:"securechipModel"`
 }
 
+// info is the data returned from the REQ_INFO api call.
+type info struct {
+	// Device firmware version. REQ_INFO is supported since v4.3.0 which means this field will
+	// always be at least v4.3.0.
+	version *semver.SemVer
+	// Device Platform/Edition e.g. "bitbox02-btconly".
+	product common.Product
+	// Device unlocked status, true if device is unlocked.
+	unlocked bool
+	// Device initialized status, true if device is seeded and backup has been stored.
+	initialized *bool
+}
+
 // NewDevice creates a new instance of Device.
 // version:
 //
 //	Can be given if known at the time of instantiation, e.g. by parsing the USB HID product string.
 //	It must be provided if the version could be less than 4.3.0.
-//	If nil, the version will be queried from the device using the OP_INFO api endpoint. Do this
+//	If nil, the version will be queried from the device using the REQ_INFO api endpoint. Do this
 //	when you are sure the firmware version is bigger or equal to 4.3.0.
 //
-// product: same deal as with the version, after 4.3.0 it can be inferred by OP_INFO.
+// product: same deal as with the version, after 4.3.0 it can be inferred by REQ_INFO.
 func NewDevice(
 	version *semver.SemVer,
 	product *common.Product,
@@ -143,26 +156,26 @@ func NewDevice(
 	}
 }
 
-// info uses the opInfo api endpoint to learn about the version, platform/edition, and unlock
-// status (true if unlocked).
-func (device *Device) info() (*semver.SemVer, common.Product, bool, error) {
+// info uses the opInfo api endpoint to learn about the version, platform/edition, unlock
+// status (true if unlocked), and initialized status (true if device can be unlocked/is unlocked).
+func (device *Device) info() (*info, error) {
 
 	// CAREFUL: hwwInfo is called on the raw transport, not on device.rawQuery, which behaves
 	// differently depending on the firmware version. Reason: the version is not
 	// available (this call is used to get the version), so it must work for all firmware versions.
 	response, err := device.communication.Query([]byte(hwwInfo))
 	if err != nil {
-		return nil, "", false, err
+		return nil, err
 	}
 
-	if len(response) < 4 {
-		return nil, "", false, errp.New("unexpected response")
+	if len(response) < 5 {
+		return nil, errp.New("unexpected response")
 	}
 	versionStrLen, response := int(response[0]), response[1:]
 	versionBytes, response := response[:versionStrLen], response[versionStrLen:]
 	version, err := semver.NewSemVerFromString(string(versionBytes))
 	if err != nil {
-		return nil, "", false, err
+		return nil, err
 	}
 	platformByte, response := response[0], response[1:]
 	editionByte, response := response[0], response[1:]
@@ -175,24 +188,40 @@ func (device *Device) info() (*semver.SemVer, common.Product, bool, error) {
 	}
 	editions, ok := products[platformByte]
 	if !ok {
-		return nil, "", false, errp.Newf("unrecognized platform: %v", platformByte)
+		return nil, errp.Newf("unrecognized platform: %v", platformByte)
 	}
 	product, ok := editions[editionByte]
 	if !ok {
-		return nil, "", false, errp.Newf("unrecognized platform/edition: %v/%v", platformByte, editionByte)
+		return nil, errp.Newf("unrecognized platform/edition: %v/%v", platformByte, editionByte)
 	}
 
 	var unlocked bool
-	unlockedByte := response[0]
+	unlockedByte, response := response[0], response[1:]
 	switch unlockedByte {
 	case 0x00:
 		unlocked = false
 	case 0x01:
 		unlocked = true
 	default:
-		return nil, "", false, errp.New("unexpected reply")
+		return nil, errp.New("unexpected reply")
 	}
-	return version, product, unlocked, nil
+
+	deviceInfo := info{
+		version:  version,
+		product:  product,
+		unlocked: unlocked,
+	}
+
+	// Since 9.20.0 REQ_INFO responds with a byte for the initialized status.
+	if version.AtLeast(semver.NewSemVer(9, 20, 0)) {
+		initialized := response[0] == 0x01
+		if response[0] != 0x00 && response[0] != 0x01 {
+			return nil, errp.New("unexpected reply")
+		}
+		deviceInfo.initialized = &initialized
+	}
+
+	return &deviceInfo, nil
 }
 
 // Version returns the firmware version.
@@ -201,30 +230,6 @@ func (device *Device) Version() *semver.SemVer {
 		panic("version not set; Init() must be called first")
 	}
 	return device.version
-}
-
-// inferVersionAndProduct either sets the version and product by using OP_INFO if they were not
-// provided. In this case, the firmware is assumed to be >=v4.3.0, before that OP_INFO was not
-// available.
-func (device *Device) inferVersionAndProduct() error {
-	// The version has not been provided, so we try to get it from OP_INFO.
-	if device.version == nil {
-		version, product, _, err := device.info()
-		if err != nil {
-			return errp.New(
-				"OP_INFO unavailable; need to provide version and product via the USB HID descriptor")
-		}
-		device.log.Info(fmt.Sprintf("OP_INFO: version=%s, product=%s", version, product))
-
-		// sanity check
-		if !version.AtLeast(semver.NewSemVer(4, 3, 0)) {
-			return errp.New("OP_INFO is not supposed to exist below v4.3.0")
-		}
-
-		device.version = version
-		device.product = &product
-	}
-	return nil
 }
 
 // Init initializes the device. It changes the status to StatusRequireAppUpgrade if needed,
@@ -241,11 +246,30 @@ func (device *Device) Init() error {
 	device.channelHashDeviceVerified = false
 	device.sendCipher = nil
 	device.receiveCipher = nil
-	device.changeStatus(StatusConnected)
 
-	if err := device.inferVersionAndProduct(); err != nil {
-		return err
+	if device.version == nil || device.version.AtLeast(semver.NewSemVer(9, 2, 0)) {
+		deviceInfo, err := device.info()
+		if err != nil {
+			return errp.New(
+				"REQ_INFO unavailable; need to provide version and product via the USB HID descriptor")
+		}
+		device.log.Info(fmt.Sprintf("REQ_INFO: version=%s, product=%s", deviceInfo.version,
+			deviceInfo.product))
+		device.version = deviceInfo.version
+		device.product = &deviceInfo.product
+
+		if !deviceInfo.version.AtLeast(semver.NewSemVer(9, 20, 0)) {
+			device.changeStatus(StatusConnected)
+		} else if deviceInfo.unlocked {
+			device.changeStatus(StatusUnlocked)
+		} else if *deviceInfo.initialized {
+			// deviceInfo.initialized is not nil if version is at least 9.20.0.
+			device.changeStatus(StatusConnected)
+		} else {
+			device.changeStatus(StatusUninitialized)
+		}
 	}
+
 	if device.version.AtLeast(lowestNonSupportedFirmwareVersion) {
 		device.changeStatus(StatusRequireAppUpgrade)
 		return nil
