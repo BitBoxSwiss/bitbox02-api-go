@@ -37,6 +37,7 @@ import (
 
 const hardenedKeyStart = 0x80000000
 
+//nolint:unparam
 func mustOutpoint(s string) *wire.OutPoint {
 	outPoint, err := wire.NewOutPointFromString(s)
 	if err != nil {
@@ -673,5 +674,182 @@ func TestSimulatorBTCSignSilentPayment(t *testing.T) {
 		} else {
 			require.EqualError(t, err, UnsupportedError("9.21.0").Error())
 		}
+	})
+}
+
+// Tests that the BitBox displays the output as being of the same account in a self-send.
+func TestSimulatorSignBTCTransactionSendSelfSameAccount(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
+		t.Helper()
+		coin := messages.BTCCoin_BTC
+
+		input0Keypath := []uint32{86 + hardenedKeyStart, 0 + hardenedKeyStart, 0 + hardenedKeyStart, 0, 0}
+		input1Keypath := []uint32{86 + hardenedKeyStart, 0 + hardenedKeyStart, 0 + hardenedKeyStart, 0, 1}
+
+		prevTx := &wire.MsgTx{
+			Version: 2,
+			TxIn: []*wire.TxIn{
+				{
+					PreviousOutPoint: *mustOutpoint("3131313131313131313131313131313131313131313131313131313131313131:0"),
+					Sequence:         0xFFFFFFFF,
+				},
+			},
+			TxOut: []*wire.TxOut{
+				{
+					Value: 100_000_000,
+					PkScript: func() []byte {
+						_, script := makeTaprootOutput(t, simulatorPub(t, device, input0Keypath...))
+						return script
+					}(),
+				},
+			},
+			LockTime: 0,
+		}
+		convertedPrevTx := NewBTCPrevTxFromBtcd(prevTx)
+
+		scriptConfigs := []*messages.BTCScriptConfigWithKeypath{
+			{
+				ScriptConfig: NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2TR),
+				Keypath:      input0Keypath[:3],
+			},
+		}
+
+		prevTxHash := prevTx.TxHash()
+		_, _, err := device.BTCSign(
+			coin,
+			scriptConfigs,
+			nil,
+			&BTCTx{
+				Version: 2,
+				Inputs: []*BTCTxInput{
+					{
+						Input: &messages.BTCSignInputRequest{
+							PrevOutHash:       prevTxHash[:],
+							PrevOutIndex:      0,
+							PrevOutValue:      uint64(prevTx.TxOut[0].Value),
+							Sequence:          0xFFFFFFFF,
+							Keypath:           input0Keypath,
+							ScriptConfigIndex: 0,
+						},
+						PrevTx: convertedPrevTx,
+					},
+				},
+				Outputs: []*messages.BTCSignOutputRequest{
+					{
+						Ours:    true,
+						Value:   70_000_000,
+						Keypath: input1Keypath,
+					},
+				},
+				Locktime: 0,
+			},
+			messages.BTCSignInitRequest_DEFAULT,
+		)
+		require.NoError(t, err)
+
+		switch {
+		// Display changed in v9.22.0.
+		case device.Version().AtLeast(semver.NewSemVer(9, 22, 0)):
+			require.Contains(t,
+				stdOut.String(),
+				"This BitBox (same account): bc1psz0tsdr9sgnukfcx4gtwpp5exyeqdycfqjvm2jw6tvsj3k3eavts20yuag",
+			)
+		case device.Version().AtLeast(semver.NewSemVer(9, 20, 0)):
+			require.Contains(t,
+				stdOut.String(),
+				"This BitBox02: bc1psz0tsdr9sgnukfcx4gtwpp5exyeqdycfqjvm2jw6tvsj3k3eavts20yuag",
+			)
+		}
+		// Before simulator v9.20, address confirmation data was not written to stdout.
+	})
+}
+
+// Tests that the BitBox displays the output as being of the same keystore, but different account.
+func TestSimulatorSignBTCTransactionSendSelfDifferentAccount(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
+		t.Helper()
+		coin := messages.BTCCoin_BTC
+
+		input0Keypath := []uint32{86 + hardenedKeyStart, 0 + hardenedKeyStart, 0 + hardenedKeyStart, 0, 0}
+		input1Keypath := []uint32{86 + hardenedKeyStart, 0 + hardenedKeyStart, 1 + hardenedKeyStart, 0, 0}
+
+		prevTx := &wire.MsgTx{
+			Version: 2,
+			TxIn: []*wire.TxIn{
+				{
+					PreviousOutPoint: *mustOutpoint("3131313131313131313131313131313131313131313131313131313131313131:0"),
+					Sequence:         0xFFFFFFFF,
+				},
+			},
+			TxOut: []*wire.TxOut{
+				{
+					Value: 100_000_000,
+					PkScript: func() []byte {
+						_, script := makeTaprootOutput(t, simulatorPub(t, device, input0Keypath...))
+						return script
+					}(),
+				},
+			},
+			LockTime: 0,
+		}
+		convertedPrevTx := NewBTCPrevTxFromBtcd(prevTx)
+
+		scriptConfigs := []*messages.BTCScriptConfigWithKeypath{
+			{
+				ScriptConfig: NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2TR),
+				Keypath:      input0Keypath[:3],
+			},
+		}
+		outputScriptConfigs := []*messages.BTCScriptConfigWithKeypath{
+			{
+				ScriptConfig: NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2TR),
+				Keypath:      input1Keypath[:3],
+			},
+		}
+		outputScriptConfigIndex := uint32(0)
+
+		prevTxHash := prevTx.TxHash()
+		_, _, err := device.BTCSign(
+			coin,
+			scriptConfigs,
+			outputScriptConfigs,
+			&BTCTx{
+				Version: 2,
+				Inputs: []*BTCTxInput{
+					{
+						Input: &messages.BTCSignInputRequest{
+							PrevOutHash:       prevTxHash[:],
+							PrevOutIndex:      0,
+							PrevOutValue:      uint64(prevTx.TxOut[0].Value),
+							Sequence:          0xFFFFFFFF,
+							Keypath:           input0Keypath,
+							ScriptConfigIndex: 0,
+						},
+						PrevTx: convertedPrevTx,
+					},
+				},
+				Outputs: []*messages.BTCSignOutputRequest{
+					{
+						Ours:                    true,
+						Value:                   70_000_000,
+						Keypath:                 input1Keypath,
+						OutputScriptConfigIndex: &outputScriptConfigIndex,
+					},
+				},
+				Locktime: 0,
+			},
+			messages.BTCSignInitRequest_DEFAULT,
+		)
+
+		// Introduced in v9.22.0.
+		if !device.Version().AtLeast(semver.NewSemVer(9, 22, 0)) {
+			require.EqualError(t, err, UnsupportedError("9.22.0").Error())
+			return
+		}
+		require.NoError(t, err)
+		require.Contains(t,
+			stdOut.String(),
+			"This BitBox (account #2): bc1pzeyhtmk2d5jrjunam30dus0p34095m622dq7trm7r0g8pwac2gvqxh8d47",
+		)
 	})
 }
