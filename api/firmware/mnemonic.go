@@ -38,7 +38,7 @@ func (device *Device) ShowMnemonic() error {
 		return errp.New("unexpected response")
 	}
 	if device.status == StatusSeeded {
-		device.changeStatus(StatusInitialized)
+		device.changeStatus(StatusUnlocked)
 	}
 	return nil
 }
@@ -63,7 +63,7 @@ func (device *Device) RestoreFromMnemonic() error {
 	if !ok {
 		return errp.New("unexpected response")
 	}
-	device.changeStatus(StatusInitialized)
+	device.changeStatus(StatusUnlocked)
 	return nil
 }
 
