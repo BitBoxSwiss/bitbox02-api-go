@@ -58,6 +58,8 @@ func testConfigurations(t *testing.T, run func(*testing.T, *testEnv)) {
 	for _, product := range []common.Product{
 		common.ProductBitBox02Multi,
 		common.ProductBitBox02BTCOnly,
+		common.ProductBitBox02PlusMulti,
+		common.ProductBitBox02PlusBTCOnly,
 	} {
 		var env testEnv
 		env.product = product
