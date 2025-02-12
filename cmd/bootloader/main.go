@@ -42,8 +42,10 @@ func errpanic(err error) {
 }
 
 func isBitBox02Bootloader(deviceInfo *hid.DeviceInfo) bool {
-	return (deviceInfo.Product == common.BootloaderHIDProductStringStandard ||
-		deviceInfo.Product == common.BootloaderHIDProductStringBTCOnly) &&
+	return (deviceInfo.Product == common.BootloaderDeviceProductStringBitBox02Multi ||
+		deviceInfo.Product == common.BootloaderDeviceProductStringBitBox02BTCOnly ||
+		deviceInfo.Product == common.BootloaderDeviceProductStringBitBox02PlusMulti ||
+		deviceInfo.Product == common.BootloaderDeviceProductStringBitBox02PlusBTCOnly) &&
 		deviceInfo.VendorID == bitbox02VendorID &&
 		deviceInfo.ProductID == bitbox02ProductID &&
 		(deviceInfo.UsagePage == 0xffff || deviceInfo.Interface == 0)
@@ -84,7 +86,7 @@ func main() {
 	comm := u2fhid.NewCommunication(hidDevice, bitbox02BootloaderCMD)
 	version, err := parseVersion(deviceInfo.Serial)
 	errpanic(err)
-	product, err := common.ProductFromHIDProductString(deviceInfo.Product)
+	product, err := common.ProductFromDeviceProductString(deviceInfo.Product)
 	errpanic(err)
 	device := bootloader.NewDevice(version, product, comm, func(*bootloader.Status) {})
 	firmwareVersion, signingPubkeysVersion, err := device.Versions()

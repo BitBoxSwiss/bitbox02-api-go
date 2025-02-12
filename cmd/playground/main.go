@@ -46,8 +46,10 @@ func errpanic(err error) {
 }
 
 func isBitBox02(deviceInfo *hid.DeviceInfo) bool {
-	return (deviceInfo.Product == common.FirmwareHIDProductStringStandard ||
-		deviceInfo.Product == common.FirmwareHIDProductStringBTCOnly) &&
+	return (deviceInfo.Product == common.FirmwareDeviceProductStringBitBox02Multi ||
+		deviceInfo.Product == common.FirmwareDeviceProductStringBitBox02BTCOnly ||
+		deviceInfo.Product == common.FirmwareDeviceProductStringBitBox02PlusMulti ||
+		deviceInfo.Product == common.FirmwareDeviceProductStringBitBox02PlusBTCOnly) &&
 		deviceInfo.VendorID == bitbox02VendorID &&
 		deviceInfo.ProductID == bitbox02ProductID &&
 		(deviceInfo.UsagePage == 0xffff || deviceInfo.Interface == 0)
