@@ -15,6 +15,7 @@
 package firmware
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -23,7 +24,7 @@ import (
 func TestSimulatorBackups(t *testing.T) {
 	const seedLen = 32
 	const testName = "test wallet name"
-	testSimulatorsAfterPairing(t, func(t *testing.T, device *Device) {
+	testSimulatorsAfterPairing(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
 		t.Helper()
 		require.NoError(t, device.SetDeviceName(testName))
 

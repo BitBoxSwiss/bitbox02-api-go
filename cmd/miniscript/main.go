@@ -339,6 +339,7 @@ func main() {
 					Keypath:      accountKeypath,
 				},
 			},
+			nil,
 			&firmware.BTCTx{
 				Version: uint32(withdrawalTransaction.Version),
 				Inputs: []*firmware.BTCTxInput{{

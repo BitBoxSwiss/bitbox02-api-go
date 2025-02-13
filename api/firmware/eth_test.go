@@ -15,6 +15,7 @@
 package firmware
 
 import (
+	"bytes"
 	"math/big"
 	"testing"
 
@@ -247,7 +248,7 @@ func TestEncodeValue(t *testing.T) {
 }
 
 func TestSimulatorETHPub(t *testing.T) {
-	testInitializedSimulators(t, func(t *testing.T, device *Device) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
 		t.Helper()
 		chainID := uint64(1)
 		xpub, err := device.ETHPub(
@@ -290,7 +291,7 @@ func TestSimulatorETHPub(t *testing.T) {
 }
 
 func TestSimulatorETHSignMessage(t *testing.T) {
-	testInitializedSimulators(t, func(t *testing.T, device *Device) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
 		t.Helper()
 		chainID := uint64(1)
 		keypath := []uint32{
@@ -315,7 +316,7 @@ func TestSimulatorETHSignMessage(t *testing.T) {
 }
 
 func TestSimulatorETHSignTypedMessage(t *testing.T) {
-	testInitializedSimulators(t, func(t *testing.T, device *Device) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
 		t.Helper()
 		msg := []byte(`
 {
@@ -381,7 +382,7 @@ func TestSimulatorETHSignTypedMessage(t *testing.T) {
 }
 
 func TestSimulatorETHSign(t *testing.T) {
-	testInitializedSimulators(t, func(t *testing.T, device *Device) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
 		t.Helper()
 		chainID := uint64(1)
 		keypath := []uint32{
@@ -416,7 +417,7 @@ func TestSimulatorETHSign(t *testing.T) {
 }
 
 func TestSimulatorETHSignEIP1559(t *testing.T) {
-	testInitializedSimulators(t, func(t *testing.T, device *Device) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
 		t.Helper()
 		chainID := uint64(1)
 		keypath := []uint32{

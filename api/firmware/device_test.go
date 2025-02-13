@@ -16,6 +16,8 @@
 package firmware
 
 import (
+	"bufio"
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -45,13 +47,28 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func runSimulator(filename string) (func() error, *Device, error) {
-	cmd := exec.Command(filename)
-	if err := cmd.Start(); err != nil {
-		return nil, nil, err
+func runSimulator(filename string) (func() error, *Device, *bytes.Buffer, error) {
+	cmd := exec.Command("stdbuf", "-oL", filename)
+
+	// Create pipe before starting process
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, nil, nil, err
 	}
+	if err := cmd.Start(); err != nil {
+		return nil, nil, nil, err
+	}
+
+	var stdoutBuf bytes.Buffer
+	scanner := bufio.NewScanner(stdout)
+	go func() {
+		for scanner.Scan() {
+			stdoutBuf.Write(scanner.Bytes())
+			stdoutBuf.WriteByte('\n')
+		}
+	}()
+
 	var conn net.Conn
-	var err error
 	for range 200 {
 		conn, err = net.Dial("tcp", "localhost:15423")
 		if err == nil {
@@ -60,7 +77,7 @@ func runSimulator(filename string) (func() error, *Device, error) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	const bitboxCMD = 0x80 + 0x40 + 0x01
 
@@ -73,7 +90,7 @@ func runSimulator(filename string) (func() error, *Device, error) {
 			return err
 		}
 		return cmd.Process.Kill()
-	}, device, nil
+	}, device, &stdoutBuf, nil
 }
 
 // Download BitBox simulators based on testdata/simulators.json to testdata/simulators/*.
@@ -162,7 +179,7 @@ func downloadSimulators() ([]string, error) {
 var downloadSimulatorsOnce = sync.OnceValues(downloadSimulators)
 
 // Runs tests against a simulator which is not initialized (not paired, not seeded).
-func testSimulators(t *testing.T, run func(*testing.T, *Device)) {
+func testSimulators(t *testing.T, run func(*testing.T, *Device, *bytes.Buffer)) {
 	t.Helper()
 	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
 		t.Skip("Skipping simulator tests: not running on linux-amd64")
@@ -180,39 +197,39 @@ func testSimulators(t *testing.T, run func(*testing.T, *Device)) {
 
 	for _, simulatorFilename := range simulatorFilenames {
 		t.Run(filepath.Base(simulatorFilename), func(t *testing.T) {
-			teardown, device, err := runSimulator(simulatorFilename)
+			teardown, device, stdOut, err := runSimulator(simulatorFilename)
 			require.NoError(t, err)
 			defer func() { require.NoError(t, teardown()) }()
-			run(t, device)
+			run(t, device, stdOut)
 		})
 	}
 }
 
 // Runs tests against a simulator which is not initialized, but paired (not seeded).
-func testSimulatorsAfterPairing(t *testing.T, run func(*testing.T, *Device)) {
+func testSimulatorsAfterPairing(t *testing.T, run func(*testing.T, *Device, *bytes.Buffer)) {
 	t.Helper()
-	testSimulators(t, func(t *testing.T, device *Device) {
+	testSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
 		t.Helper()
 		require.NoError(t, device.Init())
 		device.ChannelHashVerify(true)
-		run(t, device)
+		run(t, device, stdOut)
 	})
 }
 
 // Runs tests againt a simulator that is seeded with this mnemonic: boring mistake dish oyster truth
 // pigeon viable emerge sort crash wire portion cannon couple enact box walk height pull today solid
 // off enable tide
-func testInitializedSimulators(t *testing.T, run func(*testing.T, *Device)) {
+func testInitializedSimulators(t *testing.T, run func(*testing.T, *Device, *bytes.Buffer)) {
 	t.Helper()
-	testSimulatorsAfterPairing(t, func(t *testing.T, device *Device) {
+	testSimulatorsAfterPairing(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
 		t.Helper()
 		require.NoError(t, device.RestoreFromMnemonic())
-		run(t, device)
+		run(t, device, stdOut)
 	})
 }
 
 func TestSimulatorRootFingerprint(t *testing.T) {
-	testInitializedSimulators(t, func(t *testing.T, device *Device) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
 		t.Helper()
 		fp, err := device.RootFingerprint()
 		require.NoError(t, err)
@@ -492,7 +509,7 @@ func TestVersion(t *testing.T) {
 }
 
 func TestSimulatorProduct(t *testing.T) {
-	testSimulators(t, func(t *testing.T, device *Device) {
+	testSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
 		t.Helper()
 		require.NoError(t, device.Init())
 		require.Equal(t, common.ProductBitBox02Multi, device.Product())
