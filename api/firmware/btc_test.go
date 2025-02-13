@@ -85,6 +85,7 @@ func TestBTCXpub(t *testing.T) {
 func TestSimulatorBTCAddress(t *testing.T) {
 	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
 		t.Helper()
+		// TBTC, P2WPKH
 		address, err := device.BTCAddress(
 			messages.BTCCoin_TBTC,
 			[]uint32{
@@ -99,6 +100,43 @@ func TestSimulatorBTCAddress(t *testing.T) {
 		)
 		require.NoError(t, err)
 		require.Equal(t, "tb1qq064dxjgl9h9wzgsmzy6t6306qew42w9ka02u3", address)
+
+		// BTC, P2WPKH
+		address, err = device.BTCAddress(
+			messages.BTCCoin_BTC,
+			[]uint32{
+				84 + hardenedKeyStart,
+				0 + hardenedKeyStart,
+				0 + hardenedKeyStart,
+				1,
+				10,
+			},
+			NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH),
+			false,
+		)
+		require.NoError(t, err)
+		require.Equal(t, "bc1qcq0ceq9vs24g4tnkkx3k2rry9j44r74huc3d7s", address)
+
+		// RBTC, P2WPKH
+		address, err = device.BTCAddress(
+			messages.BTCCoin_RBTC,
+			[]uint32{
+				84 + hardenedKeyStart,
+				1 + hardenedKeyStart,
+				0 + hardenedKeyStart,
+				1,
+				10,
+			},
+			NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH),
+			false,
+		)
+		// Regtest (RBTC) support added in v9.21.0
+		if device.Version().AtLeast(semver.NewSemVer(9, 21, 0)) {
+			require.NoError(t, err)
+			require.Equal(t, "bcrt1qq064dxjgl9h9wzgsmzy6t6306qew42w955k8tc", address)
+		} else {
+			require.Error(t, err)
+		}
 	})
 }
 
