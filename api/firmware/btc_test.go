@@ -82,7 +82,7 @@ func TestBTCXpub(t *testing.T) {
 	})
 }
 
-func TestBTCAddress(t *testing.T) {
+func TestSimulatorBTCAddress(t *testing.T) {
 	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
 		t.Helper()
 		address, err := device.BTCAddress(
@@ -208,7 +208,7 @@ func TestSimulatorBTCXPub(t *testing.T) {
 	})
 }
 
-func TestSimulatorBTCAddress(t *testing.T) {
+func TestBTCAddress(t *testing.T) {
 	testConfigurations(t, func(t *testing.T, env *testEnv) {
 		t.Helper()
 		expected := "mocked-address"
