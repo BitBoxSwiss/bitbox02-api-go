@@ -15,6 +15,7 @@
 package firmware
 
 import (
+	"bytes"
 	"encoding/hex"
 	"testing"
 
@@ -23,7 +24,7 @@ import (
 )
 
 func TestSimulatorCardanoXPubs(t *testing.T) {
-	testInitializedSimulators(t, func(t *testing.T, device *Device) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
 		t.Helper()
 		xpubs, err := device.CardanoXPubs(
 			[][]uint32{
@@ -45,7 +46,7 @@ func TestSimulatorCardanoXPubs(t *testing.T) {
 }
 
 func TestSimulatorCardanoAddress(t *testing.T) {
-	testInitializedSimulators(t, func(t *testing.T, device *Device) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
 		t.Helper()
 		const account = uint32(1)
 		const rolePayment = uint32(0)     // receive

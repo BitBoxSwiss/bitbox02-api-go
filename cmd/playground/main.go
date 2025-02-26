@@ -161,6 +161,7 @@ func signFromTxID(device *firmware.Device, txID string) {
 				Keypath:      []uint32{84 + HARDENED, 1 + HARDENED, 0 + HARDENED},
 			},
 		},
+		nil,
 		&firmware.BTCTx{
 			Version:  tx.Transaction.Version,
 			Inputs:   inputs,

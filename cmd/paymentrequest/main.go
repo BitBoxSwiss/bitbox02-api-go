@@ -175,6 +175,7 @@ func main() {
 				Keypath:      []uint32{84 + HARDENED, 1 + HARDENED, 0 + HARDENED},
 			},
 		},
+		nil,
 		&firmware.BTCTx{
 			Version: 2,
 			Inputs: []*firmware.BTCTxInput{{
