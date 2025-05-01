@@ -352,6 +352,11 @@ func (device *Device) SupportsETH(chainID uint64) bool {
 	return false
 }
 
+// SupportsBluetooth returns true if this device supports Bluetooth.
+func (device *Device) SupportsBluetooth() bool {
+	return *device.product == common.ProductBitBox02PlusMulti || *device.product == common.ProductBitBox02PlusBTCOnly
+}
+
 // SupportsERC20 returns true if an ERC20 token is supported by the device api.
 //
 // For now, this list only contains tokens relevant to the BitBoxApp, otherwise the bitbox02-api-js
