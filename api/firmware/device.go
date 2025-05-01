@@ -103,6 +103,12 @@ type Device struct {
 	log     Logger
 }
 
+// BluetoothInfo contains Bluetooth-related info.
+type BluetoothInfo struct {
+	// FirmwareHash is the hex-encoded 32 byte Bluetooth firmware hash.
+	FirmwareHash string `json:"firmwareHash"`
+}
+
 // DeviceInfo is the data returned from the device info api call.
 type DeviceInfo struct {
 	Name                      string `json:"name"`
@@ -112,6 +118,8 @@ type DeviceInfo struct {
 	// This information is only available since firmwae v9.6.0. Will be an empty string for older
 	// firmware versions.
 	SecurechipModel string `json:"securechipModel"`
+	// Available on Bluetooth-enabled devices, Will be `nil` otherwise.
+	Bluetooth *BluetoothInfo `json:"bluetooth"`
 }
 
 // NewDevice creates a new instance of Device.
