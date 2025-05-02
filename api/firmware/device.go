@@ -94,7 +94,14 @@ type Device struct {
 	// nonces must match the incrementing of the device nonces, so the decryption works. Avoid the
 	// situation where we Encrypt() locally twice, and send the queries out of order, which will
 	// result in a failed decryption on the device.
+	//
+	// Also, every request is followed by a response, so this lock ensures the responses is matched
+	// to the request.
 	queryLock sync.Mutex
+	// While `queryLock` ensures that the response matches the request, `apiLock` ensures that a
+	// series of request<>response pairs does not get interrupted. Some API calls require a series
+	// of calls, like signing a BTC transactions.
+	apiLock sync.Mutex
 
 	status Status
 

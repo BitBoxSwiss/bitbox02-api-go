@@ -30,9 +30,9 @@ import (
 
 const multisigNameMaxLen = 30
 
-// queryBTC is like query, but nested one level deeper.
-func (device *Device) queryBTC(request *messages.BTCRequest) (*messages.BTCResponse, error) {
-	response, err := device.query(&messages.Request{
+// nonAtomicQueryBTC is like nonAtomicQuery, but nested one level deeper.
+func (device *Device) nonAtomicQueryBTC(request *messages.BTCRequest) (*messages.BTCResponse, error) {
+	response, err := device.nonAtomicQuery(&messages.Request{
 		Request: &messages.Request_Btc{
 			Btc: request,
 		},
@@ -45,6 +45,13 @@ func (device *Device) queryBTC(request *messages.BTCRequest) (*messages.BTCRespo
 		return nil, errp.New("unexpected reply")
 	}
 	return btcResponse.Btc, nil
+}
+
+// queryBTC is like query, but nested one level deeper.
+func (device *Device) queryBTC(request *messages.BTCRequest) (*messages.BTCResponse, error) {
+	return atomicQueriesValue(device, func() (*messages.BTCResponse, error) {
+		return device.nonAtomicQueryBTC(request)
+	})
 }
 
 // NewBTCScriptConfigSimple is a helper to construct the correct script config for simple script
@@ -172,9 +179,9 @@ func (device *Device) BTCAddress(
 	return pubResponse.Pub.Pub, nil
 }
 
-func (device *Device) queryBtcSign(request proto.Message) (
+func (device *Device) nonAtomicQueryBtcSign(request proto.Message) (
 	*messages.BTCSignNextResponse, error) {
-	response, err := device.query(request)
+	response, err := device.nonAtomicQuery(request)
 	if err != nil {
 		return nil, err
 	}
@@ -185,9 +192,9 @@ func (device *Device) queryBtcSign(request proto.Message) (
 	return next.BtcSignNext, nil
 }
 
-func (device *Device) nestedQueryBtcSign(request *messages.BTCRequest) (
+func (device *Device) nonAtomicNestedQueryBtcSign(request *messages.BTCRequest) (
 	*messages.BTCSignNextResponse, error) {
-	response, err := device.queryBTC(request)
+	response, err := device.nonAtomicQueryBTC(request)
 	if err != nil {
 		return nil, err
 	}
@@ -286,9 +293,7 @@ type BTCSignResult struct {
 	GeneratedOutputs map[int][]byte
 }
 
-// BTCSign signs a bitcoin or bitcoin-like transaction. The previous transactions of the inputs
-// need to be provided if `BTCSignNeedsPrevTxs()` returns true.
-func (device *Device) BTCSign(
+func (device *Device) nonAtomicBTCSign(
 	coin messages.BTCCoin,
 	scriptConfigs []*messages.BTCScriptConfigWithKeypath,
 	outputScriptConfigs []*messages.BTCScriptConfigWithKeypath,
@@ -323,7 +328,7 @@ func (device *Device) BTCSign(
 	}
 
 	signatures := make([][]byte, len(tx.Inputs))
-	next, err := device.queryBtcSign(&messages.Request{
+	next, err := device.nonAtomicQueryBtcSign(&messages.Request{
 		Request: &messages.Request_BtcSignInit{
 			BtcSignInit: &messages.BTCSignInitRequest{
 				Coin:                         coin,
@@ -363,7 +368,7 @@ func (device *Device) BTCSign(
 					Commitment: antikleptoHostCommit(hostNonce),
 				}
 			}
-			next, err = device.queryBtcSign(&messages.Request{
+			next, err = device.nonAtomicQueryBtcSign(&messages.Request{
 				Request: &messages.Request_BtcSignInput{
 					BtcSignInput: input,
 				}})
@@ -376,7 +381,7 @@ func (device *Device) BTCSign(
 					return nil, errp.New("unexpected response; expected signer nonce commitment")
 				}
 				signerCommitment := next.AntiKleptoSignerCommitment.Commitment
-				next, err = device.nestedQueryBtcSign(
+				next, err = device.nonAtomicNestedQueryBtcSign(
 					&messages.BTCRequest{
 						Request: &messages.BTCRequest_AntikleptoSignature{
 							AntikleptoSignature: &messages.AntiKleptoSignatureRequest{
@@ -408,7 +413,7 @@ func (device *Device) BTCSign(
 			}
 		case messages.BTCSignNextResponse_PREVTX_INIT:
 			prevtx := tx.Inputs[next.Index].PrevTx
-			next, err = device.nestedQueryBtcSign(
+			next, err = device.nonAtomicNestedQueryBtcSign(
 				&messages.BTCRequest{
 					Request: &messages.BTCRequest_PrevtxInit{
 						PrevtxInit: &messages.BTCPrevTxInitRequest{
@@ -424,7 +429,7 @@ func (device *Device) BTCSign(
 			}
 		case messages.BTCSignNextResponse_PREVTX_INPUT:
 			prevtxInput := tx.Inputs[next.Index].PrevTx.Inputs[next.PrevIndex]
-			next, err = device.nestedQueryBtcSign(
+			next, err = device.nonAtomicNestedQueryBtcSign(
 				&messages.BTCRequest{
 					Request: &messages.BTCRequest_PrevtxInput{
 						PrevtxInput: prevtxInput,
@@ -435,7 +440,7 @@ func (device *Device) BTCSign(
 			}
 		case messages.BTCSignNextResponse_PREVTX_OUTPUT:
 			prevtxOutput := tx.Inputs[next.Index].PrevTx.Outputs[next.PrevIndex]
-			next, err = device.nestedQueryBtcSign(
+			next, err = device.nonAtomicNestedQueryBtcSign(
 				&messages.BTCRequest{
 					Request: &messages.BTCRequest_PrevtxOutput{
 						PrevtxOutput: prevtxOutput,
@@ -446,7 +451,7 @@ func (device *Device) BTCSign(
 			}
 		case messages.BTCSignNextResponse_OUTPUT:
 			outputIndex := next.Index
-			next, err = device.queryBtcSign(&messages.Request{
+			next, err = device.nonAtomicQueryBtcSign(&messages.Request{
 				Request: &messages.Request_BtcSignOutput{
 					BtcSignOutput: tx.Outputs[outputIndex],
 				}})
@@ -471,7 +476,7 @@ func (device *Device) BTCSign(
 				return nil, errp.New("payment request index out of bounds")
 			}
 			paymentRequest := tx.PaymentRequests[paymentRequestIndex]
-			next, err = device.nestedQueryBtcSign(
+			next, err = device.nonAtomicNestedQueryBtcSign(
 				&messages.BTCRequest{
 					Request: &messages.BTCRequest_PaymentRequest{
 						PaymentRequest: paymentRequest,
@@ -488,6 +493,26 @@ func (device *Device) BTCSign(
 			}, nil
 		}
 	}
+}
+
+// BTCSign signs a bitcoin or bitcoin-like transaction. The previous transactions of the inputs
+// need to be provided if `BTCSignNeedsPrevTxs()` returns true.
+func (device *Device) BTCSign(
+	coin messages.BTCCoin,
+	scriptConfigs []*messages.BTCScriptConfigWithKeypath,
+	outputScriptConfigs []*messages.BTCScriptConfigWithKeypath,
+	tx *BTCTx,
+	formatUnit messages.BTCSignInitRequest_FormatUnit,
+) (*BTCSignResult, error) {
+	return atomicQueriesValue(device, func() (*BTCSignResult, error) {
+		return device.nonAtomicBTCSign(
+			coin,
+			scriptConfigs,
+			outputScriptConfigs,
+			tx,
+			formatUnit,
+		)
+	})
 }
 
 // BTCIsScriptConfigRegistered returns true if the script config / account is already registered.
@@ -562,9 +587,7 @@ type BTCSignMessageResult struct {
 	ElectrumSig65 []byte
 }
 
-// BTCSignMessage signs a Bitcoin message. The 64 byte raw signature, the recoverable ID and the 65
-// byte signature in Electrum format are returned.
-func (device *Device) BTCSignMessage(
+func (device *Device) nonAtomicBTCSignMessage(
 	coin messages.BTCCoin,
 	scriptConfig *messages.BTCScriptConfigWithKeypath,
 	message []byte,
@@ -601,7 +624,7 @@ func (device *Device) BTCSignMessage(
 			},
 		},
 	}
-	response, err := device.queryBTC(request)
+	response, err := device.nonAtomicQueryBTC(request)
 	if err != nil {
 		return nil, err
 	}
@@ -612,7 +635,7 @@ func (device *Device) BTCSignMessage(
 		if !ok {
 			return nil, errp.New("unexpected response")
 		}
-		response, err := device.queryBTC(&messages.BTCRequest{
+		response, err := device.nonAtomicQueryBTC(&messages.BTCRequest{
 			Request: &messages.BTCRequest_AntikleptoSignature{
 				AntikleptoSignature: &messages.AntiKleptoSignatureRequest{
 					HostNonce: hostNonce,
@@ -653,4 +676,15 @@ func (device *Device) BTCSignMessage(
 		RecID:         recID,
 		ElectrumSig65: electrumSig65,
 	}, nil
+}
+
+// BTCSignMessage signs a Bitcoin message.
+func (device *Device) BTCSignMessage(
+	coin messages.BTCCoin,
+	scriptConfig *messages.BTCScriptConfigWithKeypath,
+	message []byte,
+) (*BTCSignMessageResult, error) {
+	return atomicQueriesValue(device, func() (*BTCSignMessageResult, error) {
+		return device.nonAtomicBTCSignMessage(coin, scriptConfig, message)
+	})
 }
