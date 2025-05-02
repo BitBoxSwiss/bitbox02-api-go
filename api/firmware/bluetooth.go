@@ -19,12 +19,12 @@ import (
 	"github.com/BitBoxSwiss/bitbox02-api-go/util/errp"
 )
 
-// queryBluetooth is like query, but nested one level deeper for Bluetooth.
-func (device *Device) queryBluetooth(request *messages.BluetoothRequest) (*messages.BluetoothResponse, error) {
+// nonAtomicQueryBluetooth is like query, but nested one level deeper for Bluetooth.
+func (device *Device) nonAtomicQueryBluetooth(request *messages.BluetoothRequest) (*messages.BluetoothResponse, error) {
 	if !device.SupportsBluetooth() {
 		return nil, errp.New("this device does not support Bluetooth")
 	}
-	response, err := device.query(&messages.Request{
+	response, err := device.nonAtomicQuery(&messages.Request{
 		Request: &messages.Request_Bluetooth{
 			Bluetooth: request,
 		},
@@ -41,44 +41,42 @@ func (device *Device) queryBluetooth(request *messages.BluetoothRequest) (*messa
 
 // BluetoothUpgrade attempts an upgrade of the Bluetooth firmware.
 func (device *Device) BluetoothUpgrade(firmware []byte) error {
-	// Send initial upgrade request
-	initReq := &messages.BluetoothUpgradeInitRequest{
-		FirmwareLength: uint32(len(firmware)),
-	}
-	req := &messages.BluetoothRequest{
-		Request: &messages.BluetoothRequest_UpgradeInit{
-			UpgradeInit: initReq,
-		},
-	}
-
-	currentResponse, err := device.queryBluetooth(req)
-	if err != nil {
-		return err
-	}
-
-	for {
-		switch resp := currentResponse.Response.(type) {
-		case *messages.BluetoothResponse_RequestChunk:
-			chunkReq := resp.RequestChunk
-			chunkData := firmware[chunkReq.Offset : chunkReq.Offset+chunkReq.Length]
-
-			currentResponse, err = device.queryBluetooth(&messages.BluetoothRequest{
-				Request: &messages.BluetoothRequest_Chunk{
-					Chunk: &messages.BluetoothChunkRequest{
-						Data: chunkData,
-					},
+	return device.atomicQueries(func() error {
+		currentResponse, err := device.nonAtomicQueryBluetooth(&messages.BluetoothRequest{
+			Request: &messages.BluetoothRequest_UpgradeInit{
+				UpgradeInit: &messages.BluetoothUpgradeInitRequest{
+					FirmwareLength: uint32(len(firmware)),
 				},
-			})
-			if err != nil {
-				return err
-			}
-
-		case *messages.BluetoothResponse_Success:
-			// Upgrade complete
-			return nil
-
-		default:
-			return errp.New("unexpected response type during bluetooth upgrade")
+			},
+		})
+		if err != nil {
+			return err
 		}
-	}
+
+		for {
+			switch resp := currentResponse.Response.(type) {
+			case *messages.BluetoothResponse_RequestChunk:
+				chunkReq := resp.RequestChunk
+				chunkData := firmware[chunkReq.Offset : chunkReq.Offset+chunkReq.Length]
+
+				currentResponse, err = device.nonAtomicQueryBluetooth(&messages.BluetoothRequest{
+					Request: &messages.BluetoothRequest_Chunk{
+						Chunk: &messages.BluetoothChunkRequest{
+							Data: chunkData,
+						},
+					},
+				})
+				if err != nil {
+					return err
+				}
+
+			case *messages.BluetoothResponse_Success:
+				// Upgrade complete
+				return nil
+
+			default:
+				return errp.New("unexpected response type during bluetooth upgrade")
+			}
+		}
+	})
 }

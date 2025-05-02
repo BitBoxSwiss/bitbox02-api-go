@@ -331,7 +331,7 @@ func main() {
 		}
 		accountKeypath := keyOriginInfo.Keypath
 		mp := multipaths[i]
-		signatures, _, err := device.BTCSign(
+		result, err := device.BTCSign(
 			coin,
 			[]*messages.BTCScriptConfigWithKeypath{
 				{
@@ -390,8 +390,8 @@ func main() {
 		errpanic(err)
 
 		// Convert to DER encoding
-		signaturesDER := make([][]byte, len(signatures))
-		for sigIndex, signature := range signatures {
+		signaturesDER := make([][]byte, len(result.Signatures))
+		for sigIndex, signature := range result.Signatures {
 			r := new(btcec.ModNScalar)
 			r.SetByteSlice(signature[:32])
 			s := new(btcec.ModNScalar)

@@ -161,7 +161,7 @@ func TestSimulatorBTCSignMessage(t *testing.T) {
 
 		pubKey := simulatorPub(t, device, keypath...)
 
-		sig, _, _, err := device.BTCSignMessage(
+		result, err := device.BTCSignMessage(
 			coin,
 			&messages.BTCScriptConfigWithKeypath{
 				ScriptConfig: NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH_P2SH),
@@ -171,7 +171,7 @@ func TestSimulatorBTCSignMessage(t *testing.T) {
 		)
 		require.NoError(t, err)
 		sigHash := chainhash.DoubleHashB([]byte("\x18Bitcoin Signed Message:\n\x07message"))
-		require.True(t, parseECDSASignature(t, sig).Verify(sigHash, pubKey))
+		require.True(t, parseECDSASignature(t, result.Signature).Verify(sigHash, pubKey))
 	})
 }
 
@@ -352,7 +352,7 @@ func TestBTCSignMessage(t *testing.T) {
 		generateHostNonce = func() ([]byte, error) {
 			return hostNonce, nil
 		}
-		sig, recID, electrumSig65, err := env.device.BTCSignMessage(
+		result, err := env.device.BTCSignMessage(
 			messages.BTCCoin_BTC,
 			&messages.BTCScriptConfigWithKeypath{
 				ScriptConfig: NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH_P2SH),
@@ -362,9 +362,9 @@ func TestBTCSignMessage(t *testing.T) {
 		)
 		if env.version.AtLeast(semver.NewSemVer(9, 2, 0)) {
 			require.NoError(t, err)
-			require.Equal(t, expectedSig[:64], sig)
-			require.Equal(t, byte(0), recID)
-			require.Equal(t, electrumSig65, append([]byte{31}, expectedSig[:64]...))
+			require.Equal(t, expectedSig[:64], result.Signature)
+			require.Equal(t, byte(0), result.RecID)
+			require.Equal(t, result.ElectrumSig65, append([]byte{31}, expectedSig[:64]...))
 		} else {
 			require.EqualError(t, err, UnsupportedError("9.2.0").Error())
 		}
@@ -422,7 +422,7 @@ func TestSimulatorBTCSignTaprootKeySpend(t *testing.T) {
 		require.False(t, BTCSignNeedsPrevTxs(scriptConfigs))
 
 		prevTxHash := prevTx.TxHash()
-		_, _, err := device.BTCSign(
+		_, err := device.BTCSign(
 			coin,
 			scriptConfigs,
 			nil,
@@ -551,7 +551,7 @@ func TestSimulatorBTCSignMixed(t *testing.T) {
 		require.True(t, BTCSignNeedsPrevTxs(scriptConfigs))
 
 		prevTxHash := prevTx.TxHash()
-		_, _, err := device.BTCSign(
+		_, err := device.BTCSign(
 			coin,
 			scriptConfigs,
 			nil,
@@ -648,7 +648,7 @@ func TestSimulatorBTCSignSilentPayment(t *testing.T) {
 			LockTime: 0,
 		}
 		prevTxHash := prevTx.TxHash()
-		_, generatedOutputs, err := device.BTCSign(
+		result, err := device.BTCSign(
 			coin,
 			[]*messages.BTCScriptConfigWithKeypath{
 				{
@@ -707,7 +707,7 @@ func TestSimulatorBTCSignSilentPayment(t *testing.T) {
 				map[int][]byte{
 					1: unhex("5120f99b8e8d97aa7b068dd7b4e7ae31f51784f5c2a0cae280748cfd23832b7dcba7"),
 				},
-				generatedOutputs,
+				result.GeneratedOutputs,
 			)
 		} else {
 			require.EqualError(t, err, UnsupportedError("9.21.0").Error())
@@ -753,7 +753,7 @@ func TestSimulatorSignBTCTransactionSendSelfSameAccount(t *testing.T) {
 		}
 
 		prevTxHash := prevTx.TxHash()
-		_, _, err := device.BTCSign(
+		_, err := device.BTCSign(
 			coin,
 			scriptConfigs,
 			nil,
@@ -847,7 +847,7 @@ func TestSimulatorSignBTCTransactionSendSelfDifferentAccount(t *testing.T) {
 		outputScriptConfigIndex := uint32(0)
 
 		prevTxHash := prevTx.TxHash()
-		_, _, err := device.BTCSign(
+		_, err := device.BTCSign(
 			coin,
 			scriptConfigs,
 			outputScriptConfigs,
