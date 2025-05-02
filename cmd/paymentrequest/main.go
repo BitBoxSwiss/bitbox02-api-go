@@ -167,7 +167,7 @@ func main() {
 	errpanic(err)
 	paymentRequest.Signature = signature[1:]
 
-	_, _, err = device.BTCSign(
+	_, err = device.BTCSign(
 		messages.BTCCoin_TBTC,
 		[]*messages.BTCScriptConfigWithKeypath{
 			{
