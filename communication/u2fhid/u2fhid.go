@@ -92,6 +92,7 @@ func (communication *Communication) SendFrame(msg string) error {
 
 func (communication *Communication) sendFrame(msg string) error {
 	dataLen := len(msg)
+	out := newBuffer()
 	if dataLen == 0 {
 		return nil
 	}
@@ -103,8 +104,10 @@ func (communication *Communication) sendFrame(msg string) error {
 			buf.WriteByte(0xee)
 		}
 		x := buf.Bytes() // needs to be in a var: https://github.com/golang/go/issues/14210#issuecomment-346402945
-		_, err := communication.device.Write(x)
-		return errp.WithMessage(errp.WithStack(err), "Failed to send message")
+		out.Write(x)
+		//_, err := communication.device.Write(x)
+		//return errp.WithMessage(errp.WithStack(err), "Failed to send message")
+		return nil
 	}
 	readBuffer := bytes.NewBufferString(msg)
 	// init frame
@@ -133,6 +136,14 @@ func (communication *Communication) sendFrame(msg string) error {
 		if err := send(header.Bytes(), readBuffer); err != nil {
 			return err
 		}
+	}
+	for out.Len() > 0 {
+		x := out.Bytes()
+		n, err := communication.device.Write(x)
+		if err != nil {
+			return errp.WithMessage(errp.WithStack(err), "Failed to send message")
+		}
+		out.Next(n)
 	}
 	return nil
 }
