@@ -18,6 +18,7 @@ package u2fhid
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"sync"
 
@@ -105,8 +106,6 @@ func (communication *Communication) sendFrame(msg string) error {
 		}
 		x := buf.Bytes() // needs to be in a var: https://github.com/golang/go/issues/14210#issuecomment-346402945
 		out.Write(x)
-		//_, err := communication.device.Write(x)
-		//return errp.WithMessage(errp.WithStack(err), "Failed to send message")
 		return nil
 	}
 	readBuffer := bytes.NewBufferString(msg)
@@ -140,6 +139,7 @@ func (communication *Communication) sendFrame(msg string) error {
 	for out.Len() > 0 {
 		x := out.Bytes()
 		n, err := communication.device.Write(x)
+		fmt.Println("LOL", n)
 		if err != nil {
 			return errp.WithMessage(errp.WithStack(err), "Failed to send message")
 		}
