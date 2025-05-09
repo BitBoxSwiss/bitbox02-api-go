@@ -233,14 +233,7 @@ func main() {
 	multipaths, pubKeys, witnessScript, hostAddress, err := policy.derive(xpubs, false, deriveAddressIndex)
 	errpanic(err)
 
-	scriptConfig := &messages.BTCScriptConfig{
-		Config: &messages.BTCScriptConfig_Policy_{
-			Policy: &messages.BTCScriptConfig_Policy{
-				Policy: desc,
-				Keys:   keys,
-			},
-		},
-	}
+	scriptConfig := firmware.NewBTCScriptConfigPolicy(desc, keys)
 
 	isRegistered, err := device.BTCIsScriptConfigRegistered(coin, scriptConfig, nil)
 	errpanic(err)
