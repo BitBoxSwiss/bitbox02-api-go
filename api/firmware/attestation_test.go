@@ -33,20 +33,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func unhex(s string) []byte {
-	b, err := hex.DecodeString(s)
-	if err != nil {
-		panic(err)
-	}
-	return b
-}
-
 // addAttestationPubkey temporarily modifies the attestation pubkeys list to add a mock entry for
 // testing.
-func addAttestationPubkey(identifier string, pubkeyInfo attestationPubkey) func() {
-	attestationPubkeys[identifier] = pubkeyInfo
+func addAttestationPubkey(pubkeyHex string) func() {
+	hash := sha256.Sum256(unhex(pubkeyHex))
+	identifier := hex.EncodeToString(hash[:])
+	attestationPubkeysMap[identifier] = pubkeyHex
 	return func() {
-		delete(attestationPubkeys, identifier)
+		delete(attestationPubkeysMap, identifier)
 	}
 }
 
@@ -75,7 +69,8 @@ func p256PrivKeyFromBytes(k []byte) *ecdsa.PrivateKey {
 func TestAttestation(t *testing.T) {
 
 	// Arbitrary values, they do not have any special meaning.
-	rootPubkeyIdentifier := unhex("78961bc16e9bc8144dd3db4fd8488e33ed93541f56943db17044e8f0a42b0ec1")
+	// identifier is the sha256 hash of the uncompressed pubkey.
+	rootPubkeyIdentifier := unhex("11554d841e74066eebc3556ed6dea4d6ceef3940009222c77c3b966349989de1")
 	rootPrivateKey, rootPublicKey := btcec.PrivKeyFromBytes(
 		unhex("15608dfed8e876bed1cf2599574ce853f7a2a017d19ba0aabd4bcba033a70880"),
 	)
@@ -88,13 +83,7 @@ func TestAttestation(t *testing.T) {
 	copy(devicePubkeyBytes[:32], devicePublicKey.X.Bytes())
 	copy(devicePubkeyBytes[32:], devicePublicKey.Y.Bytes())
 
-	undo := addAttestationPubkey(
-		hex.EncodeToString(rootPubkeyIdentifier),
-		attestationPubkey{
-			pubkeyHex:                 hex.EncodeToString(rootPublicKey.SerializeUncompressed()),
-			acceptedBootloaderHashHex: hex.EncodeToString(bootloaderHash),
-		},
-	)
+	undo := addAttestationPubkey(hex.EncodeToString(rootPublicKey.SerializeUncompressed()))
 	defer undo()
 
 	communication := &mocks.Communication{}
