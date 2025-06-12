@@ -147,7 +147,8 @@ func (device *Device) GotoStartupSettings() error {
 	return device.reboot(messages.RebootRequest_SETTINGS)
 }
 
-// Reset factory resets the device. You must call device.Init() afterwards.
+// Reset factory resets the device. The device will reobot.
+// You must not use this instance anymore afterwards.
 func (device *Device) Reset() error {
 	request := &messages.Request{
 		Request: &messages.Request_Reset_{
