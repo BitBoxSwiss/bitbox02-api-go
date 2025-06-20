@@ -69,7 +69,9 @@ func (device *Device) DeviceInfo() (*DeviceInfo, error) {
 	var bluetooth *BluetoothInfo
 	if deviceInfoResponse.DeviceInfo.Bluetooth != nil {
 		bluetooth = &BluetoothInfo{
-			FirmwareHash: hex.EncodeToString(deviceInfoResponse.DeviceInfo.Bluetooth.FirmwareHash),
+			FirmwareHash:    hex.EncodeToString(deviceInfoResponse.DeviceInfo.Bluetooth.FirmwareHash),
+			FirmwareVersion: deviceInfoResponse.DeviceInfo.Bluetooth.FirmwareVersion,
+			Enabled:         deviceInfoResponse.DeviceInfo.Bluetooth.Enabled,
 		}
 	}
 
