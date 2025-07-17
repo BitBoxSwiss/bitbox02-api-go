@@ -80,7 +80,7 @@ func main() {
 	hidDevice, err := deviceInfo.Open()
 	errpanic(err)
 
-	comm := u2fhid.NewCommunication(hidDevice, bitboxCMD)
+	comm := u2fhid.NewCommunication(u2fhid.NewHidDevice(hidDevice), bitboxCMD)
 	device := firmware.NewDevice(nil, nil, &mocks.Config{}, comm, &mocks.Logger{})
 	errpanic(device.Init())
 	device.ChannelHashVerify(true)
