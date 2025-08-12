@@ -194,7 +194,7 @@ func main() {
 	hidDevice, err := deviceInfo.Open()
 	errpanic(err)
 	const bitboxCMD = 0x80 + 0x40 + 0x01
-	comm := u2fhid.NewCommunication(hidDevice, bitboxCMD)
+	comm := u2fhid.NewCommunication(u2fhid.NewHidDevice(hidDevice), bitboxCMD)
 	device := firmware.NewDevice(nil, nil, &mocks.Config{}, comm, &mocks.Logger{})
 	device.SetOnEvent(func(ev firmware.Event, meta interface{}) {
 		if ev == firmware.EventAttestationCheckDone {

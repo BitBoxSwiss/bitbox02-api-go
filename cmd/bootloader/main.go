@@ -83,7 +83,7 @@ func main() {
 	hidDevice, err := deviceInfo.Open()
 	errpanic(err)
 	const bitbox02BootloaderCMD = 0x80 + 0x40 + 0x03
-	comm := u2fhid.NewCommunication(hidDevice, bitbox02BootloaderCMD)
+	comm := u2fhid.NewCommunication(u2fhid.NewHidDevice(hidDevice), bitbox02BootloaderCMD)
 	version, err := parseVersion(deviceInfo.Serial)
 	errpanic(err)
 	product, err := common.ProductFromDeviceProductString(deviceInfo.Product)
