@@ -37,6 +37,43 @@ import (
 
 const hardenedKeyStart = 0x80000000
 
+func p2wpkhPkScript(pubkey *btcec.PublicKey) []byte {
+	pubkeyHash := btcutil.Hash160(pubkey.SerializeCompressed())
+	addr, err := btcutil.NewAddressWitnessPubKeyHash(pubkeyHash, &chaincfg.MainNetParams)
+	if err != nil {
+		panic(err)
+	}
+	pkScript, err := txscript.PayToAddrScript(addr)
+	if err != nil {
+		panic(err)
+	}
+	return pkScript
+}
+
+func p2trPkScript(xonlyPubkey []byte) []byte {
+	addr, err := btcutil.NewAddressTaproot(xonlyPubkey, &chaincfg.MainNetParams)
+	if err != nil {
+		panic(err)
+	}
+	pkScript, err := txscript.PayToAddrScript(addr)
+	if err != nil {
+		panic(err)
+	}
+	return pkScript
+}
+
+func p2shPkScript(redeemScript []byte) []byte {
+	addr, err := btcutil.NewAddressScriptHash(redeemScript, &chaincfg.MainNetParams)
+	if err != nil {
+		panic(err)
+	}
+	pkScript, err := txscript.PayToAddrScript(addr)
+	if err != nil {
+		panic(err)
+	}
+	return pkScript
+}
+
 //nolint:unparam
 func mustOutpoint(s string) *wire.OutPoint {
 	outPoint, err := wire.NewOutPointFromString(s)
@@ -480,8 +517,6 @@ func TestSimulatorBTCSignMixed(t *testing.T) {
 		input1Keypath := []uint32{84 + hardenedKeyStart, 0 + hardenedKeyStart, 0 + hardenedKeyStart, 0, 0}
 		input2Keypath := []uint32{49 + hardenedKeyStart, 0 + hardenedKeyStart, 0 + hardenedKeyStart, 0, 0}
 
-		net := &chaincfg.MainNetParams
-
 		prevTx := &wire.MsgTx{
 			Version: 2,
 			TxIn: []*wire.TxIn{
@@ -499,34 +534,12 @@ func TestSimulatorBTCSignMixed(t *testing.T) {
 					}(),
 				},
 				{
-					Value: 100_000_000,
-					PkScript: func() []byte {
-						inputPub := simulatorPub(t, device, input1Keypath...)
-
-						publicKeyHash := btcutil.Hash160(inputPub.SerializeCompressed())
-						address, err := btcutil.NewAddressWitnessPubKeyHash(publicKeyHash, net)
-						require.NoError(t, err)
-						pkScript, err := txscript.PayToAddrScript(address)
-						require.NoError(t, err)
-						return pkScript
-					}(),
+					Value:    100_000_000,
+					PkScript: p2wpkhPkScript(simulatorPub(t, device, input1Keypath...)),
 				},
 				{
-					Value: 100_000_000,
-					PkScript: func() []byte {
-						inputPub := simulatorPub(t, device, input2Keypath...)
-						publicKeyHash := btcutil.Hash160(inputPub.SerializeCompressed())
-
-						segwitAddress, err := btcutil.NewAddressWitnessPubKeyHash(publicKeyHash, net)
-						require.NoError(t, err)
-						redeemScript, err := txscript.PayToAddrScript(segwitAddress)
-						require.NoError(t, err)
-						address, err := btcutil.NewAddressScriptHash(redeemScript, net)
-						require.NoError(t, err)
-						pkScript, err := txscript.PayToAddrScript(address)
-						require.NoError(t, err)
-						return pkScript
-					}(),
+					Value:    100_000_000,
+					PkScript: p2shPkScript(p2wpkhPkScript(simulatorPub(t, device, input2Keypath...))),
 				},
 			},
 			LockTime: 0,
