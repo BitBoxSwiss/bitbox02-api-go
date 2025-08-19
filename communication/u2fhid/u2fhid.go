@@ -27,6 +27,8 @@ import (
 const (
 	writeReportSize = 64
 	readReportSize  = 64
+
+	cmdError = 0x80 | 0x3F
 )
 
 const (
@@ -170,12 +172,22 @@ func (communication *Communication) readFrame() ([]byte, error) {
 	if replyCid != cid {
 		return nil, errp.Newf("USB command ID mismatch, %v != %v", cid, replyCid)
 	}
-	if read[4] != communication.cmd {
-		return nil, errp.Newf("USB command frame mismatch (%d, expected %d)", read[4], communication.cmd)
-	}
+
 	data := newBuffer()
 	dataLen := int(read[5])*256 + int(read[6])
 	data.Write(read[7:readLen])
+
+	cmd := read[4]
+	if cmd == cmdError {
+		errCode := byte(0)
+		if data.Len() > 0 {
+			errCode = data.Bytes()[0]
+		}
+		return nil, errp.WithStack(FrameError(errCode))
+	}
+	if cmd != communication.cmd {
+		return nil, errp.Newf("USB command frame mismatch (%d, expected %d)", cmd, communication.cmd)
+	}
 	idx := len(read) - 7
 	for idx < dataLen {
 		readLen, err = communication.device.Read(read)
