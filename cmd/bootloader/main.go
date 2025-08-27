@@ -23,6 +23,7 @@ import (
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/bootloader"
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/common"
 	"github.com/BitBoxSwiss/bitbox02-api-go/communication/u2fhid"
+	"github.com/BitBoxSwiss/bitbox02-api-go/communication/u2fhid/hiddevice"
 	"github.com/BitBoxSwiss/bitbox02-api-go/util/errp"
 	"github.com/BitBoxSwiss/bitbox02-api-go/util/semver"
 	"github.com/karalabe/hid"
@@ -83,7 +84,7 @@ func main() {
 	hidDevice, err := deviceInfo.Open()
 	errpanic(err)
 	const bitbox02BootloaderCMD = 0x80 + 0x40 + 0x03
-	comm := u2fhid.NewCommunication(u2fhid.NewHidDevice(hidDevice), bitbox02BootloaderCMD)
+	comm := u2fhid.NewCommunication(hiddevice.New(hidDevice), bitbox02BootloaderCMD)
 	version, err := parseVersion(deviceInfo.Serial)
 	errpanic(err)
 	product, err := common.ProductFromDeviceProductString(deviceInfo.Product)

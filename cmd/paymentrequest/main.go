@@ -29,6 +29,7 @@ import (
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/messages"
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/mocks"
 	"github.com/BitBoxSwiss/bitbox02-api-go/communication/u2fhid"
+	"github.com/BitBoxSwiss/bitbox02-api-go/communication/u2fhid/hiddevice"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/wire"
@@ -128,7 +129,7 @@ func main() {
 	hidDevice, err := deviceInfo.Open()
 	errpanic(err)
 
-	comm := u2fhid.NewCommunication(u2fhid.NewHidDevice(hidDevice), bitboxCMD)
+	comm := u2fhid.NewCommunication(hiddevice.New(hidDevice), bitboxCMD)
 	device := firmware.NewDevice(nil, nil, &mocks.Config{}, comm, &mocks.Logger{})
 	errpanic(device.Init())
 	device.ChannelHashVerify(true)
