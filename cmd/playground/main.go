@@ -29,6 +29,7 @@ import (
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/messages"
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/mocks"
 	"github.com/BitBoxSwiss/bitbox02-api-go/communication/u2fhid"
+	"github.com/BitBoxSwiss/bitbox02-api-go/communication/u2fhid/hiddevice"
 	"github.com/karalabe/hid"
 )
 
@@ -194,7 +195,7 @@ func main() {
 	hidDevice, err := deviceInfo.Open()
 	errpanic(err)
 	const bitboxCMD = 0x80 + 0x40 + 0x01
-	comm := u2fhid.NewCommunication(u2fhid.NewHidDevice(hidDevice), bitboxCMD)
+	comm := u2fhid.NewCommunication(hiddevice.New(hidDevice), bitboxCMD)
 	device := firmware.NewDevice(nil, nil, &mocks.Config{}, comm, &mocks.Logger{})
 	device.SetOnEvent(func(ev firmware.Event, meta interface{}) {
 		if ev == firmware.EventAttestationCheckDone {
