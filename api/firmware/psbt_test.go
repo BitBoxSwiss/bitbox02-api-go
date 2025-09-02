@@ -220,7 +220,7 @@ func TestNewBTCTxFromPSBT_P2WPKH(t *testing.T) {
 	psbt_, err := psbt.NewFromRawBytes(bytes.NewBufferString(psbtStr), true)
 	require.NoError(t, err)
 	ourRootFingerprint := []byte{0x12, 0xa2, 0xc1, 0x89}
-	result, err := newBTCTxFromPSBT(psbt_, ourRootFingerprint, nil)
+	result, err := newBTCTxFromPSBT(semver.NewSemVer(9, 23, 1), psbt_, ourRootFingerprint, nil)
 	require.NoError(t, err)
 	require.Equal(t, expectedTx, result.tx)
 	assert.Len(t, result.scriptConfigs, 1)
@@ -593,4 +593,136 @@ func TestSimulatorBTCPSBTSilentPayment(t *testing.T) {
 		require.NoError(t, psbt.MaybeFinalizeAll(psbt_))
 		require.NoError(t, txValidityCheck(psbt_))
 	})
+}
+
+func TestSimulatorBTCPSBTSendSelfSameAccount(t *testing.T) {
+	type Test struct {
+		sendSelfPath []uint32
+		// expected from v9.22
+		expectedNew string
+		// expected until v9.22
+		expectedOld string
+	}
+
+	tests := []Test{
+		{
+			// Same account
+			sendSelfPath: []uint32{84 + HARDENED, 1 + HARDENED, 0 + HARDENED, 0, 0},
+			expectedNew:  "This BitBox (same account): tb1ql34ny8mcpgjqr0ngsnjmlpzjpgncyz2ygh2gye",
+			expectedOld:  "This BitBox02: tb1ql34ny8mcpgjqr0ngsnjmlpzjpgncyz2ygh2gye",
+		},
+		{
+			// Different account
+			sendSelfPath: []uint32{84 + HARDENED, 1 + HARDENED, 1 + HARDENED, 0, 0},
+			expectedNew:  "This BitBox (account #2): tb1qvrcm2akp30d7ecnqdjk8qdu09962ak005rcp6j",
+			expectedOld:  "tb1qvrcm2akp30d7ecnqdjk8qdu09962ak005rcp6j",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run("", func(t *testing.T) {
+			testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
+				t.Helper()
+
+				fingerprint, err := device.RootFingerprint()
+				require.NoError(t, err)
+
+				// Derivation paths
+				input0Path := []uint32{86 + HARDENED, 1 + HARDENED, 0 + HARDENED, 0, 0} // P2TR
+				changePath := []uint32{49 + HARDENED, 1 + HARDENED, 0 + HARDENED, 1, 0} // P2WPKH-P2SH
+				sendSelfPath := test.sendSelfPath
+
+				input0Pub := simulatorPub(t, device, input0Path...)
+				changePub := simulatorPub(t, device, changePath...)
+				sendSelfPub := simulatorPub(t, device, sendSelfPath...)
+				changeRedeemScript := p2wpkhPkScript(changePub)
+				changePkScript := p2shPkScript(changeRedeemScript)
+				changeAddress, err := btcutil.NewAddressScriptHash(changeRedeemScript, &chaincfg.TestNet3Params)
+				require.NoError(t, err)
+
+				// Previous transaction with one output.
+				prevTx := &wire.MsgTx{
+					Version:  2,
+					LockTime: 0,
+					TxIn: []*wire.TxIn{{
+						PreviousOutPoint: *mustOutpoint("3131313131313131313131313131313131313131313131313131313131313131:0"),
+						Sequence:         0xFFFFFFFF,
+					}},
+					TxOut: []*wire.TxOut{
+						{ // P2TR
+							Value: 100_000_000,
+							PkScript: func() []byte {
+								_, script := makeTaprootOutput(t, input0Pub)
+								return script
+							}(),
+						},
+					},
+				}
+
+				// Spending transaction
+				tx := &wire.MsgTx{
+					Version:  2,
+					LockTime: 0,
+					TxIn: []*wire.TxIn{
+						{PreviousOutPoint: wire.OutPoint{Hash: prevTx.TxHash(), Index: 0}}, // P2TR input
+					},
+					TxOut: []*wire.TxOut{
+						{ // Change output (P2TR)
+							Value:    50_000_000,
+							PkScript: changePkScript,
+						},
+						{ // External output
+							Value:    20_000_000,
+							PkScript: p2wpkhPkScript(sendSelfPub),
+						},
+					},
+				}
+
+				psbt_, err := psbt.NewFromUnsignedTx(tx)
+				require.NoError(t, err)
+
+				// Setup PSBT inputs
+				// Input 0 (P2TR)
+				psbt_.Inputs[0].NonWitnessUtxo = prevTx
+				psbt_.Inputs[0].WitnessUtxo = prevTx.TxOut[0]
+				psbt_.Inputs[0].TaprootInternalKey = schnorr.SerializePubKey(changePub)
+				psbt_.Inputs[0].TaprootBip32Derivation = []*psbt.TaprootBip32Derivation{{
+					XOnlyPubKey:          psbt_.Inputs[0].TaprootInternalKey,
+					MasterKeyFingerprint: binary.LittleEndian.Uint32(fingerprint),
+					Bip32Path:            input0Path,
+				}}
+
+				// Setup change output (P2SH-P2WPKH)
+				psbt_.Outputs[0].Bip32Derivation = []*psbt.Bip32Derivation{{
+					PubKey:               changePub.SerializeCompressed(),
+					MasterKeyFingerprint: binary.LittleEndian.Uint32(fingerprint),
+					Bip32Path:            changePath,
+				}}
+				psbt_.Outputs[0].RedeemScript = changeRedeemScript
+
+				// Setup send-to-self output
+				psbt_.Outputs[1].Bip32Derivation = []*psbt.Bip32Derivation{{
+					PubKey:               sendSelfPub.SerializeCompressed(),
+					MasterKeyFingerprint: binary.LittleEndian.Uint32(fingerprint),
+					Bip32Path:            sendSelfPath,
+				}}
+
+				// Sign & validate
+				require.NoError(t, device.BTCSignPSBT(messages.BTCCoin_TBTC, psbt_, nil))
+				require.NoError(t, psbt.MaybeFinalizeAll(psbt_))
+				require.NoError(t, txValidityCheck(psbt_))
+
+				// v9.22 changed the format of the output string.
+				if device.Version().AtLeast(semver.NewSemVer(9, 22, 0)) {
+					require.Contains(t, stdOut.String(), "ADDRESS: "+test.expectedNew)
+				} else if device.Version().AtLeast(semver.NewSemVer(9, 20, 0)) {
+					// Before simulator v9.20, address confirmation data was not written to stdout.
+					require.Contains(t, stdOut.String(), "ADDRESS: "+test.expectedOld)
+				}
+
+				// Change address is not confirmed
+				require.NotContains(t, stdOut.String(), changeAddress.String())
+			})
+		})
+	}
 }
