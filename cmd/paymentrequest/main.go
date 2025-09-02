@@ -16,12 +16,8 @@
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/binary"
 	"encoding/hex"
-	"errors"
 	"fmt"
-	"hash"
 	"log"
 
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/common"
@@ -32,7 +28,6 @@ import (
 	"github.com/BitBoxSwiss/bitbox02-api-go/communication/u2fhid/hiddevice"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
-	"github.com/btcsuite/btcd/wire"
 	"github.com/karalabe/hid"
 )
 
@@ -66,47 +61,6 @@ func isBitBox02(deviceInfo *hid.DeviceInfo) bool {
 		deviceInfo.VendorID == bitbox02VendorID &&
 		deviceInfo.ProductID == bitbox02ProductID &&
 		(deviceInfo.UsagePage == 0xffff || deviceInfo.Interface == 0)
-}
-
-func hashDataLenPrefixed(hasher hash.Hash, data []byte) {
-	_ = wire.WriteVarInt(hasher, 0, uint64(len(data)))
-	hasher.Write(data)
-}
-
-func computeSighash(paymentRequest *messages.BTCPaymentRequestRequest, slip44 uint32, outputValue uint64, outputAddress string) ([]byte, error) {
-	sighash := sha256.New()
-
-	// versionMagic
-	sighash.Write([]byte("SL\x00\x24"))
-
-	// nonce
-	hashDataLenPrefixed(sighash, paymentRequest.Nonce)
-
-	// recipientName
-	hashDataLenPrefixed(sighash, []byte(paymentRequest.RecipientName))
-
-	// memos
-	_ = wire.WriteVarInt(sighash, 0, uint64(len(paymentRequest.Memos)))
-	for _, memo := range paymentRequest.Memos {
-		switch m := memo.Memo.(type) {
-		case *messages.BTCPaymentRequestRequest_Memo_TextMemo_:
-			_ = binary.Write(sighash, binary.LittleEndian, uint32(1))
-			hashDataLenPrefixed(sighash, []byte(m.TextMemo.Note))
-		default:
-			return nil, errors.New("unsupported memo type")
-		}
-	}
-
-	// coinType
-	_ = binary.Write(sighash, binary.LittleEndian, slip44)
-
-	// outputsHash (only one output for now)
-	outputHasher := sha256.New()
-	_ = binary.Write(outputHasher, binary.LittleEndian, outputValue)
-	hashDataLenPrefixed(outputHasher, []byte(outputAddress))
-	sighash.Write(outputHasher.Sum(nil))
-
-	return sighash.Sum(nil), nil
 }
 
 func main() {
@@ -160,7 +114,11 @@ func main() {
 	}
 
 	// Sign the payment request.
-	sighash, err := computeSighash(paymentRequest, 1, value, "tb1q2q0j6gmfxynj40p0kxsr9jkagcvgpuqvqynnup")
+	sighash, err := firmware.ComputePaymentRequestSighash(
+		paymentRequest,
+		1,
+		value,
+		"tb1q2q0j6gmfxynj40p0kxsr9jkagcvgpuqvqynnup")
 	errpanic(err)
 	privKey, _ := btcec.PrivKeyFromBytes([]byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
 	errpanic(err)

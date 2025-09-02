@@ -23,6 +23,8 @@ import (
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/messages"
 	"github.com/BitBoxSwiss/bitbox02-api-go/util/errp"
 	"github.com/BitBoxSwiss/bitbox02-api-go/util/semver"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/psbt"
@@ -725,4 +727,161 @@ func TestSimulatorBTCPSBTSendSelfSameAccount(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestSimulatorBTCPSBTPaymentRequest(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
+		t.Helper()
+
+		if !device.Version().AtLeast(semver.NewSemVer(9, 24, 0)) {
+			// While payment requests were added in v9.19.0, the simulator only enabled the
+			// test merchant in v9.24.0.
+			t.Skip()
+		}
+
+		fingerprint, err := device.RootFingerprint()
+		require.NoError(t, err)
+
+		// Derivation paths
+		input0Path := []uint32{86 + HARDENED, 1 + HARDENED, 0 + HARDENED, 0, 0} // P2TR
+		changePath := []uint32{49 + HARDENED, 1 + HARDENED, 0 + HARDENED, 1, 0} // P2WPKH-P2SH
+
+		input0Pub := simulatorPub(t, device, input0Path...)
+		changePub := simulatorPub(t, device, changePath...)
+		changeRedeemScript := p2wpkhPkScript(changePub)
+		changePkScript := p2shPkScript(changeRedeemScript)
+		require.NoError(t, err)
+
+		address, err := btcutil.DecodeAddress(
+			"tb1q9kvhpyd32aqhpsc8yrdm48gx5dnadq63lservm",
+			&chaincfg.TestNet3Params)
+		require.NoError(t, err)
+		pkScript, err := txscript.PayToAddrScript(address)
+		require.NoError(t, err)
+
+		value := uint64(20_000_000)
+
+		paymentRequest := &messages.BTCPaymentRequestRequest{
+			RecipientName: "Test Merchant", // Hard-coded test merchant in simulator
+			Nonce:         nil,
+			TotalAmount:   value,
+			Memos: []*messages.BTCPaymentRequestRequest_Memo{
+				{
+					Memo: &messages.BTCPaymentRequestRequest_Memo_TextMemo_{
+						TextMemo: &messages.BTCPaymentRequestRequest_Memo_TextMemo{
+							Note: "TextMemo line1\nTextMemo line2",
+						},
+					},
+				},
+			},
+		}
+		// Sign the payment request.
+		sighash, err := ComputePaymentRequestSighash(paymentRequest, 1, value, address.String())
+		require.NoError(t, err)
+		privKey, _ := btcec.PrivKeyFromBytes([]byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+		require.NoError(t, err)
+		signature, err := ecdsa.SignCompact(privKey, sighash, true)
+		require.NoError(t, err)
+		paymentRequest.Signature = signature[1:]
+
+		// Previous transaction with one output.
+		prevTx := &wire.MsgTx{
+			Version:  2,
+			LockTime: 0,
+			TxIn: []*wire.TxIn{{
+				PreviousOutPoint: *mustOutpoint("3131313131313131313131313131313131313131313131313131313131313131:0"),
+				Sequence:         0xFFFFFFFF,
+			}},
+			TxOut: []*wire.TxOut{
+				{ // P2TR
+					Value: 100_000_000,
+					PkScript: func() []byte {
+						_, script := makeTaprootOutput(t, input0Pub)
+						return script
+					}(),
+				},
+			},
+		}
+
+		// Spending transaction
+		tx := &wire.MsgTx{
+			Version:  2,
+			LockTime: 0,
+			TxIn: []*wire.TxIn{
+				{PreviousOutPoint: wire.OutPoint{Hash: prevTx.TxHash(), Index: 0}}, // P2TR input
+			},
+			TxOut: []*wire.TxOut{
+				{ // Change output (P2TR)
+					Value:    50_000_000,
+					PkScript: changePkScript,
+				},
+				{ // External output
+					Value:    int64(value),
+					PkScript: pkScript,
+				},
+			},
+		}
+
+		psbt_, err := psbt.NewFromUnsignedTx(tx)
+		require.NoError(t, err)
+
+		// Setup PSBT inputs
+		// Input 0 (P2TR)
+		psbt_.Inputs[0].NonWitnessUtxo = prevTx
+		psbt_.Inputs[0].WitnessUtxo = prevTx.TxOut[0]
+		psbt_.Inputs[0].TaprootInternalKey = schnorr.SerializePubKey(changePub)
+		psbt_.Inputs[0].TaprootBip32Derivation = []*psbt.TaprootBip32Derivation{{
+			XOnlyPubKey:          psbt_.Inputs[0].TaprootInternalKey,
+			MasterKeyFingerprint: binary.LittleEndian.Uint32(fingerprint),
+			Bip32Path:            input0Path,
+		}}
+
+		// Setup change output (P2SH-P2WPKH)
+		psbt_.Outputs[0].Bip32Derivation = []*psbt.Bip32Derivation{{
+			PubKey:               changePub.SerializeCompressed(),
+			MasterKeyFingerprint: binary.LittleEndian.Uint32(fingerprint),
+			Bip32Path:            changePath,
+		}}
+		psbt_.Outputs[0].RedeemScript = changeRedeemScript
+
+		// Sign & validate
+		paymentRequestIndex := uint32(0)
+		signOptions := &PSBTSignOptions{
+			PaymentRequests: []*messages.BTCPaymentRequestRequest{paymentRequest},
+			Outputs: map[int]*PSBTSignOutputOptions{
+				1: {
+					PaymentRequestIndex: &paymentRequestIndex,
+				},
+			},
+		}
+		require.NoError(t, device.BTCSignPSBT(messages.BTCCoin_TBTC, psbt_, signOptions))
+		require.NoError(t, psbt.MaybeFinalizeAll(psbt_))
+		require.NoError(t, txValidityCheck(psbt_))
+
+		const expected1 = `CONFIRM TRANSACTION ADDRESS SCREEN START
+AMOUNT: 0.20000000 TBTC
+ADDRESS: Test Merchant
+CONFIRM TRANSACTION ADDRESS SCREEN END`
+
+		const expected2 = `
+BODY: Memo from
+
+Test Merchant
+CONFIRM SCREEN END
+CONFIRM SCREEN START
+TITLE: Memo 1/2
+BODY: TextMemo line1
+CONFIRM SCREEN END
+CONFIRM SCREEN START
+TITLE: Memo 2/2
+BODY: TextMemo line2
+CONFIRM SCREEN END`
+
+		require.Contains(t, stdOut.String(), expected1)
+
+		require.Contains(t, stdOut.String(), expected2)
+
+		// The actual address is not shown in a payment request.
+		require.NotContains(t, stdOut.String(), address.String())
+	})
 }

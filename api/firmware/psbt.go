@@ -245,6 +245,9 @@ type PSBTSignOutputOptions struct {
 	// - it requires PSBTv2, while we only support PSBTv0 (see https://github.com/btcsuite/btcd/issues/2328)
 	// - BitBox02 silent payment support predates the BIP, and its DLEQ proof deviates from the one in the BIP.
 	SilentPaymentAddress string
+	// PaymentRequestIndex is nil if this output is not attached to a payment request. Otherwise
+	// this references a payment request in `PSBTSignOptions.PaymentRequests`.
+	PaymentRequestIndex *uint32
 }
 
 // PSBTSignOptions allows for providing signing options beyond what is encoded in the PSBT.
@@ -263,6 +266,8 @@ type PSBTSignOptions struct {
 	// but not by this library. If you should encounter this case, omit the key info from such
 	// outputs, so they will be displayed and confirmed as regular outputs paying to an address.
 	ForceScriptConfig *messages.BTCScriptConfigWithKeypath
+	// SLIP-24 payment requests.
+	PaymentRequests []*messages.BTCPaymentRequestRequest
 	// Per-output options. The map key is the output index.
 	Outputs map[int]*PSBTSignOutputOptions
 }
@@ -505,6 +510,10 @@ func newBTCTxFromPSBT(
 		psbtOutput := psbt_.Outputs[outputIndex]
 
 		outputOptions := options.Outputs[outputIndex]
+		if outputOptions == nil {
+			// Use defaults.
+			outputOptions = &PSBTSignOutputOptions{}
+		}
 
 		ourKey, err := findOurKey(ourRootFingerprint, psbtOutputInfo{psbtOutput})
 		if err != nil {
@@ -545,7 +554,7 @@ func newBTCTxFromPSBT(
 			var silentPayment *messages.BTCSignOutputRequest_SilentPayment
 			var outputType messages.BTCOutputType
 			var payload []byte
-			if outputOptions != nil && outputOptions.SilentPaymentAddress != "" {
+			if outputOptions.SilentPaymentAddress != "" {
 				silentPayment = &messages.BTCSignOutputRequest_SilentPayment{
 					Address: outputOptions.SilentPaymentAddress,
 				}
@@ -556,20 +565,22 @@ func newBTCTxFromPSBT(
 				}
 			}
 			outputs[outputIndex] = &messages.BTCSignOutputRequest{
-				Ours:          false,
-				Value:         uint64(txOutput.Value),
-				Type:          outputType,
-				Payload:       payload,
-				SilentPayment: silentPayment,
+				Ours:                false,
+				Value:               uint64(txOutput.Value),
+				Type:                outputType,
+				Payload:             payload,
+				SilentPayment:       silentPayment,
+				PaymentRequestIndex: outputOptions.PaymentRequestIndex,
 			}
 		}
 	}
 
 	tx := &BTCTx{
-		Version:  uint32(psbt_.UnsignedTx.Version),
-		Inputs:   inputs,
-		Outputs:  outputs,
-		Locktime: psbt_.UnsignedTx.LockTime,
+		Version:         uint32(psbt_.UnsignedTx.Version),
+		Inputs:          inputs,
+		Outputs:         outputs,
+		Locktime:        psbt_.UnsignedTx.LockTime,
+		PaymentRequests: options.PaymentRequests,
 	}
 
 	return &psbtConvertResult{
