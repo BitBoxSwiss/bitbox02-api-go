@@ -162,6 +162,39 @@ func (device *Device) BTCXPub(
 	return pubResponse.Pub.Pub, nil
 }
 
+// BTCXPubs queries the device for multiple xpubs at a time.
+func (device *Device) BTCXPubs(
+	coin messages.BTCCoin,
+	keypaths [][]uint32,
+	xpubType messages.BTCXpubsRequest_XPubType) ([]string, error) {
+	keypathMsgs := make([]*messages.Keypath, len(keypaths))
+	if !device.version.AtLeast(semver.NewSemVer(9, 24, 0)) {
+		return nil, UnsupportedError("9.24.0")
+	}
+	for i, keypath := range keypaths {
+		keypathMsgs[i] = &messages.Keypath{Keypath: keypath}
+	}
+	request := &messages.BTCRequest{
+		Request: &messages.BTCRequest_Xpubs{
+			Xpubs: &messages.BTCXpubsRequest{
+				Coin:     coin,
+				XpubType: xpubType,
+				Keypaths: keypathMsgs,
+			},
+		},
+	}
+	response, err := device.queryBTC(request)
+	if err != nil {
+		return nil, err
+	}
+
+	pubsResponse, ok := response.Response.(*messages.BTCResponse_Pubs)
+	if !ok {
+		return nil, errp.New("unexpected response")
+	}
+	return pubsResponse.Pubs.Pubs, nil
+}
+
 // BTCAddress queries the device for a btc, ltc, tbtc, tltc address.
 func (device *Device) BTCAddress(
 	coin messages.BTCCoin,
