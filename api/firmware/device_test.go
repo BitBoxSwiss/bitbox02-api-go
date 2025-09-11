@@ -536,7 +536,12 @@ func TestSimulatorProduct(t *testing.T) {
 	testSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
 		t.Helper()
 		require.NoError(t, device.Init())
-		require.Equal(t, common.ProductBitBox02Multi, device.Product())
+		// Since v9.24.0, the simulator simulates a Nova device.
+		if device.Version().AtLeast(semver.NewSemVer(9, 24, 0)) {
+			require.Equal(t, common.ProductBitBox02PlusMulti, device.Product())
+		} else {
+			require.Equal(t, common.ProductBitBox02Multi, device.Product())
+		}
 	})
 }
 

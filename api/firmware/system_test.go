@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/BitBoxSwiss/bitbox02-api-go/api/common"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,7 +28,12 @@ func TestSimulatorDeviceName(t *testing.T) {
 		t.Helper()
 		info, err := device.DeviceInfo()
 		require.NoError(t, err)
-		require.Equal(t, "My BitBox", info.Name)
+		switch device.Product() {
+		case common.ProductBitBox02PlusMulti, common.ProductBitBox02PlusBTCOnly:
+			require.Equal(t, "BitBox HCXT", info.Name)
+		default:
+			require.Equal(t, "My BitBox", info.Name)
+		}
 
 		// Name too long.
 		require.Error(t, device.SetDeviceName(
