@@ -119,6 +119,39 @@ func TestSimulatorBTCXpub(t *testing.T) {
 	})
 }
 
+func TestSimulatorBTCXPubs(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
+		t.Helper()
+		xpubs, err := device.BTCXPubs(messages.BTCCoin_TBTC,
+			[][]uint32{
+				{
+					49 + hardenedKeyStart,
+					1 + hardenedKeyStart,
+					0 + hardenedKeyStart,
+				},
+				{
+					84 + hardenedKeyStart,
+					1 + hardenedKeyStart,
+					0 + hardenedKeyStart,
+				},
+				{
+					86 + hardenedKeyStart,
+					1 + hardenedKeyStart,
+					0 + hardenedKeyStart,
+				},
+			}, messages.BTCXpubsRequest_TPUB)
+
+		require.NoError(t, err)
+		require.Equal(t,
+			[]string{
+				"tpubDCNtvuCS9oj3psPNfXZXuGjcQ5rSBi3MzigjBqqwQohWWetoRdLzT5v2uJq6KBTwxj1FYvuPTr7RoWkN4cmubDy5wW8SU3q9xYnDRpQepiT",
+				"tpubDCYNsKenq7Cuuf4fHsu2fsWA7Wb5cTD2qRUrw6uHbNNYQoNkEoJk4hgNhxbnGss5gnEe2MpqN2qbRVqWJGmuofAWmwFFi4CZ9Tg1LHKJDhF",
+				"tpubDDc6eecoyYxL4g3WKYpbbinyUmnfVikQCzHTPd6rJQivaPqGKBFiueQqWoAYonB8hAEXGM1ak7LqrnwczH24EbW7jbG5bNK5rncmRXtv7nG",
+			},
+			xpubs)
+	})
+}
+
 func TestSimulatorBTCAddress(t *testing.T) {
 	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
 		t.Helper()
