@@ -106,7 +106,7 @@ func TestNewXPub(t *testing.T) {
 	}, xpub)
 }
 
-func TestBTCXpub(t *testing.T) {
+func TestSimulatorBTCXpub(t *testing.T) {
 	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
 		t.Helper()
 		xpub, err := device.BTCXPub(messages.BTCCoin_TBTC, []uint32{
@@ -212,7 +212,7 @@ func TestSimulatorBTCSignMessage(t *testing.T) {
 	})
 }
 
-func TestSimulatorBTCXPub(t *testing.T) {
+func TestBTCXPub(t *testing.T) {
 	testConfigurations(t, func(t *testing.T, env *testEnv) {
 		t.Helper()
 		expected := "mocked-xpub"
