@@ -335,6 +335,131 @@ func TestSimulatorBTCPSBTTaprootKeySpend(t *testing.T) {
 			Bip32Path:            changePath,
 		}}
 
+		needsPrevTxs, err := device.BTCSignNeedsNonWitnessUTXOs(psbt_, nil)
+		require.NoError(t, err)
+		require.False(t, needsPrevTxs)
+
+		// Sign & validate.
+		require.NoError(t, device.BTCSignPSBT(messages.BTCCoin_TBTC, psbt_, nil))
+		require.NoError(t, psbt.MaybeFinalizeAll(psbt_))
+		require.NoError(t, txValidityCheck(psbt_))
+	})
+}
+
+// All inputs are Taproot, but the change output is not Taproot. Some BitBox firmwares erroneously
+// also request the previous transactions in this case.
+func TestSimulatorBTCPSBTTaprootSpendsToNonTaproot(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
+		t.Helper()
+
+		fingerprint, err := device.RootFingerprint()
+		require.NoError(t, err)
+
+		changePath := []uint32{84 + HARDENED, 1 + HARDENED, 0 + HARDENED, 1, 0}
+		changePubKey := simulatorPub(t, device, changePath...)
+		changePkScript := p2wpkhPkScript(changePubKey)
+
+		input0Path := []uint32{86 + HARDENED, 1 + HARDENED, 0 + HARDENED, 0, 0}
+		input0Pubkey := simulatorPub(t, device, input0Path...)
+		_, input0PkScript := makeTaprootOutput(t, input0Pubkey)
+
+		input1Path := []uint32{86 + HARDENED, 1 + HARDENED, 0 + HARDENED, 0, 1}
+		input1PubKey := simulatorPub(t, device, input1Path...)
+		_, input1PkScript := makeTaprootOutput(t, input1PubKey)
+
+		// A previous tx which creates some UTXOs we can reference later.
+		prevTx := &wire.MsgTx{
+			Version:  2,
+			LockTime: 0,
+			TxIn: []*wire.TxIn{
+				{
+					PreviousOutPoint: *mustOutpoint("3131313131313131313131313131313131313131313131313131313131313131:0"),
+					SignatureScript:  nil,
+					Sequence:         0xFFFFFFFF,
+					Witness:          nil,
+				},
+			},
+			TxOut: []*wire.TxOut{
+				{
+					Value:    100_000_000,
+					PkScript: input0PkScript,
+				},
+				{
+					Value:    100_000_000,
+					PkScript: input1PkScript,
+				},
+			},
+		}
+
+		tx := &wire.MsgTx{
+			Version:  2,
+			LockTime: 0,
+			TxIn: []*wire.TxIn{
+				{
+					PreviousOutPoint: wire.OutPoint{
+						Hash:  prevTx.TxHash(),
+						Index: 0,
+					},
+					SignatureScript: nil,
+					Sequence:        0xFFFFFFFF,
+					Witness:         nil,
+				},
+				{
+					PreviousOutPoint: wire.OutPoint{
+						Hash:  prevTx.TxHash(),
+						Index: 1,
+					},
+					SignatureScript: nil,
+					Sequence:        0xFFFFFFFF,
+					Witness:         nil,
+				},
+			},
+			TxOut: []*wire.TxOut{
+				{
+					Value:    100_000_000,
+					PkScript: changePkScript,
+				},
+				{
+					Value: 20_000_000,
+					// random private key:
+					// 9dbb534622a6100a39b73dece43c6d4db14b9a612eb46a6c64c2bb849e283ce8
+					PkScript: p2trPkScript(unhex("e4adbb12c3426ec71ebb10688d8ae69d531ca822a2b790acee216a7f1b95b576")),
+				},
+			},
+		}
+		psbt_, err := psbt.NewFromUnsignedTx(tx)
+		require.NoError(t, err)
+
+		// Add input and change infos.
+		psbt_.Inputs[0].WitnessUtxo = prevTx.TxOut[0]
+		psbt_.Inputs[0].TaprootInternalKey = schnorr.SerializePubKey(input0Pubkey)
+		psbt_.Inputs[0].TaprootBip32Derivation = []*psbt.TaprootBip32Derivation{{
+			XOnlyPubKey:          psbt_.Inputs[0].TaprootInternalKey,
+			MasterKeyFingerprint: binary.LittleEndian.Uint32(fingerprint),
+			Bip32Path:            input0Path,
+		}}
+
+		psbt_.Inputs[1].WitnessUtxo = prevTx.TxOut[1]
+		psbt_.Inputs[1].TaprootInternalKey = schnorr.SerializePubKey(input1PubKey)
+		psbt_.Inputs[1].TaprootBip32Derivation = []*psbt.TaprootBip32Derivation{{
+			XOnlyPubKey:          psbt_.Inputs[1].TaprootInternalKey,
+			MasterKeyFingerprint: binary.LittleEndian.Uint32(fingerprint),
+			Bip32Path:            input1Path,
+		}}
+
+		psbt_.Outputs[0].TaprootInternalKey = schnorr.SerializePubKey(changePubKey)
+		psbt_.Outputs[0].TaprootBip32Derivation = []*psbt.TaprootBip32Derivation{{
+			XOnlyPubKey:          psbt_.Outputs[0].TaprootInternalKey,
+			MasterKeyFingerprint: binary.LittleEndian.Uint32(fingerprint),
+			Bip32Path:            changePath,
+		}}
+
+		needsPrevTxs, err := device.BTCSignNeedsNonWitnessUTXOs(psbt_, nil)
+		require.NoError(t, err)
+		require.True(t, needsPrevTxs)
+		psbt_.Inputs[0].NonWitnessUtxo = prevTx
+		psbt_.Inputs[1].NonWitnessUtxo = prevTx
+
 		// Sign & validate.
 		require.NoError(t, device.BTCSignPSBT(messages.BTCCoin_TBTC, psbt_, nil))
 		require.NoError(t, psbt.MaybeFinalizeAll(psbt_))
@@ -457,6 +582,10 @@ func TestSimulatorBTCPSBTMixedSpend(t *testing.T) {
 			Bip32Path:            changePath,
 		}}
 
+		needsPrevTxs, err := device.BTCSignNeedsNonWitnessUTXOs(psbt_, nil)
+		require.NoError(t, err)
+		require.True(t, needsPrevTxs)
+
 		// Sign & validate
 		require.NoError(t, device.BTCSignPSBT(messages.BTCCoin_TBTC, psbt_, nil))
 		require.NoError(t, psbt.MaybeFinalizeAll(psbt_))
@@ -578,7 +707,6 @@ func TestSimulatorBTCPSBTSilentPayment(t *testing.T) {
 			Bip32Path:            changePath,
 		}}
 
-		// Sign & validate
 		signOptions := &PSBTSignOptions{
 			Outputs: map[int]*PSBTSignOutputOptions{
 				1: {
@@ -586,6 +714,12 @@ func TestSimulatorBTCPSBTSilentPayment(t *testing.T) {
 				},
 			},
 		}
+
+		needsPrevTxs, err := device.BTCSignNeedsNonWitnessUTXOs(psbt_, signOptions)
+		require.NoError(t, err)
+		require.True(t, needsPrevTxs)
+
+		// Sign & validate
 		err = device.BTCSignPSBT(messages.BTCCoin_BTC, psbt_, signOptions)
 		if !device.version.AtLeast(semver.NewSemVer(9, 21, 0)) {
 			require.EqualError(t, err, UnsupportedError("9.21.0").Error())
@@ -708,6 +842,10 @@ func TestSimulatorBTCPSBTSendSelfSameAccount(t *testing.T) {
 					MasterKeyFingerprint: binary.LittleEndian.Uint32(fingerprint),
 					Bip32Path:            sendSelfPath,
 				}}
+
+				needsPrevTxs, err := device.BTCSignNeedsNonWitnessUTXOs(psbt_, nil)
+				require.NoError(t, err)
+				require.True(t, needsPrevTxs)
 
 				// Sign & validate
 				require.NoError(t, device.BTCSignPSBT(messages.BTCCoin_TBTC, psbt_, nil))
@@ -844,7 +982,6 @@ func TestSimulatorBTCPSBTPaymentRequest(t *testing.T) {
 		}}
 		psbt_.Outputs[0].RedeemScript = changeRedeemScript
 
-		// Sign & validate
 		paymentRequestIndex := uint32(0)
 		signOptions := &PSBTSignOptions{
 			PaymentRequests: []*messages.BTCPaymentRequestRequest{paymentRequest},
@@ -854,6 +991,12 @@ func TestSimulatorBTCPSBTPaymentRequest(t *testing.T) {
 				},
 			},
 		}
+
+		needsPrevTxs, err := device.BTCSignNeedsNonWitnessUTXOs(psbt_, signOptions)
+		require.NoError(t, err)
+		require.False(t, needsPrevTxs)
+
+		// Sign & validate
 		require.NoError(t, device.BTCSignPSBT(messages.BTCCoin_TBTC, psbt_, signOptions))
 		require.NoError(t, psbt.MaybeFinalizeAll(psbt_))
 		require.NoError(t, txValidityCheck(psbt_))
