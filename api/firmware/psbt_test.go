@@ -84,6 +84,7 @@ func TestPayloadFromPkScript(t *testing.T) {
 	tests := []struct {
 		name            string
 		address         string
+		pkScriptHex     string // Used for OP_RETURN instead of address
 		expectedType    messages.BTCOutputType
 		expectedPayload string
 	}{
@@ -117,18 +118,41 @@ func TestPayloadFromPkScript(t *testing.T) {
 			expectedPayload: "a60869f0dbcf1dc659c9cecbaf8050135ea9e8cdc487053f1dc6880949dc684c",
 			expectedType:    messages.BTCOutputType_P2TR,
 		},
+		{
+			name:            "OP_RETURN empty",
+			pkScriptHex:     "6a00",
+			expectedType:    messages.BTCOutputType_OP_RETURN,
+			expectedPayload: "",
+		},
+		{
+			name:            "OP_RETURN 3 bytes",
+			pkScriptHex:     "6a03aabbcc",
+			expectedType:    messages.BTCOutputType_OP_RETURN,
+			expectedPayload: "aabbcc",
+		},
+		{
+			name:            "OP_RETURN 80 bytes (OP_PUSHDATA1)",
+			pkScriptHex:     "6a4c50aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			expectedType:    messages.BTCOutputType_OP_RETURN,
+			expectedPayload: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			addr, err := btcutil.DecodeAddress(tt.address, &chaincfg.MainNetParams)
-			require.NoError(t, err)
+			var pkScript []byte
+			var err error
 
-			pkScript, err := txscript.PayToAddrScript(addr)
-			require.NoError(t, err)
+			if tt.pkScriptHex != "" {
+				pkScript = unhex(tt.pkScriptHex)
+			} else {
+				addr, err := btcutil.DecodeAddress(tt.address, &chaincfg.MainNetParams)
+				require.NoError(t, err)
+				pkScript, err = txscript.PayToAddrScript(addr)
+				require.NoError(t, err)
+			}
 
 			outputType, payload, err := payloadFromPkScript(pkScript)
-
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedType, outputType)
 			assert.Equal(t, tt.expectedPayload, hex.EncodeToString(payload))
