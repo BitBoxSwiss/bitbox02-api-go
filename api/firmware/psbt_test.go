@@ -1028,3 +1028,127 @@ CONFIRM SCREEN END`
 		require.NotContains(t, stdOut.String(), address.String())
 	})
 }
+
+// 1-of-3 P2WSH multisig spend
+func TestSimulatorBTCPSBTMultisig(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
+		t.Helper()
+
+		fingerprint, err := device.RootFingerprint()
+		require.NoError(t, err)
+
+		coin := messages.BTCCoin_BTC
+
+		keypathAccount := []uint32{
+			48 + hardenedKeyStart,
+			0 + hardenedKeyStart,
+			0 + hardenedKeyStart,
+			2 + hardenedKeyStart,
+		}
+
+		changeKeypath := append(append([]uint32{}, keypathAccount...), 1, 0)
+		inputKeypath := append(append([]uint32{}, keypathAccount...), 0, 0)
+
+		inputPubKey := simulatorPub(t, device, inputKeypath...)
+		changePubKey := simulatorPub(t, device, changeKeypath...)
+
+		ourXPub, err := device.BTCXPub(coin, keypathAccount, messages.BTCPubRequest_XPUB, false)
+		require.NoError(t, err)
+
+		xpubs := []string{
+			ourXPub,
+			"xpub6Esa6esRHkbuXtbdDKqu3uWjQ1GpK39WW2hxbUAN4L3TxrwDyghEwBtUYZ8uK8LZh3tJ3pjWEpxng9tjfo7RT9BaZKV2T3EPvmZ6N1LgSdj",
+			"xpub6FJ6FAAFUzuWQAKyT98Ngs6UwsoPfPCdmepqX2aLLPT54M85ARsWzPciFd49foStMwhWgfiHP6PnMgPrWLrBJpUHgqw8vZPd5ov8uSfW2vo",
+		}
+		ourXPubIndex := uint32(0)
+		threshold := 1
+
+		inputWitnessScript, inputPkScript := multisigP2WSH(threshold, xpubs, false, 0)
+		changeWitnessScript, changePkScript := multisigP2WSH(threshold, xpubs, true, 0)
+
+		scriptConfig, err := NewBTCScriptConfigMultisig(uint32(threshold), xpubs, ourXPubIndex)
+		require.NoError(t, err)
+
+		// The multisig account has to be registered if not already.
+		registered, err := device.BTCIsScriptConfigRegistered(coin, scriptConfig, keypathAccount)
+		require.NoError(t, err)
+		require.False(t, registered)
+
+		err = device.BTCRegisterScriptConfig(coin, scriptConfig, keypathAccount, "My multisig account")
+		require.NoError(t, err)
+
+		// Previous transaction with mixed outputs
+		prevTx := &wire.MsgTx{
+			Version:  2,
+			LockTime: 0,
+			TxIn: []*wire.TxIn{{
+				PreviousOutPoint: *mustOutpoint("3131313131313131313131313131313131313131313131313131313131313131:0"),
+				Sequence:         0xFFFFFFFF,
+			}},
+			TxOut: []*wire.TxOut{
+				{
+					Value:    100_000_000,
+					PkScript: inputPkScript,
+				},
+			},
+		}
+
+		// Spending transaction
+		tx := &wire.MsgTx{
+			Version:  2,
+			LockTime: 0,
+			TxIn: []*wire.TxIn{
+				{PreviousOutPoint: wire.OutPoint{Hash: prevTx.TxHash(), Index: 0}},
+			},
+			TxOut: []*wire.TxOut{
+				{ // Change output (P2WSH multisig)
+					Value:    70_000_000,
+					PkScript: changePkScript,
+				},
+				{ // External output
+					Value: 20_000_000,
+					// random private key:
+					// 9dbb534622a6100a39b73dece43c6d4db14b9a612eb46a6c64c2bb849e283ce8
+					PkScript: p2trPkScript(unhex("e4adbb12c3426ec71ebb10688d8ae69d531ca822a2b790acee216a7f1b95b576")),
+				},
+			},
+		}
+
+		psbt_, err := psbt.NewFromUnsignedTx(tx)
+		require.NoError(t, err)
+
+		// Setup PSBT inputs
+		// Input 0 (P2WSH multisig)
+		psbt_.Inputs[0].NonWitnessUtxo = prevTx
+		psbt_.Inputs[0].WitnessUtxo = prevTx.TxOut[0]
+		psbt_.Inputs[0].WitnessScript = inputWitnessScript
+		psbt_.Inputs[0].Bip32Derivation = []*psbt.Bip32Derivation{{
+			PubKey:               inputPubKey.SerializeCompressed(),
+			MasterKeyFingerprint: binary.LittleEndian.Uint32(fingerprint),
+			Bip32Path:            inputKeypath,
+		}}
+
+		// Setup change output (P2WSH multisig)
+		psbt_.Outputs[0].WitnessScript = changeWitnessScript
+		psbt_.Outputs[0].Bip32Derivation = []*psbt.Bip32Derivation{{
+			PubKey:               changePubKey.SerializeCompressed(),
+			MasterKeyFingerprint: binary.LittleEndian.Uint32(fingerprint),
+			Bip32Path:            changeKeypath,
+		}}
+
+		signOptions := &PSBTSignOptions{
+			ForceScriptConfig: &messages.BTCScriptConfigWithKeypath{
+				ScriptConfig: scriptConfig,
+				Keypath:      keypathAccount,
+			},
+		}
+		needsPrevTxs, err := device.BTCSignNeedsNonWitnessUTXOs(psbt_, signOptions)
+		require.NoError(t, err)
+		require.True(t, needsPrevTxs)
+
+		// Sign & validate
+		require.NoError(t, device.BTCSignPSBT(coin, psbt_, signOptions))
+		require.NoError(t, psbt.MaybeFinalizeAll(psbt_))
+		require.NoError(t, txValidityCheck(psbt_))
+	})
+}
