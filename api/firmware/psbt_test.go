@@ -1038,44 +1038,13 @@ func TestSimulatorBTCPSBTMultisig(t *testing.T) {
 		require.NoError(t, err)
 
 		coin := messages.BTCCoin_BTC
+		setup := setupMultisigAccount(t, device, coin)
 
-		keypathAccount := []uint32{
-			48 + hardenedKeyStart,
-			0 + hardenedKeyStart,
-			0 + hardenedKeyStart,
-			2 + hardenedKeyStart,
-		}
+		inputPubKey := simulatorPub(t, device, setup.ReceiveKeypath...)
+		changePubKey := simulatorPub(t, device, setup.ChangeKeypath...)
 
-		changeKeypath := append(append([]uint32{}, keypathAccount...), 1, 0)
-		inputKeypath := append(append([]uint32{}, keypathAccount...), 0, 0)
-
-		inputPubKey := simulatorPub(t, device, inputKeypath...)
-		changePubKey := simulatorPub(t, device, changeKeypath...)
-
-		ourXPub, err := device.BTCXPub(coin, keypathAccount, messages.BTCPubRequest_XPUB, false)
-		require.NoError(t, err)
-
-		xpubs := []string{
-			ourXPub,
-			"xpub6Esa6esRHkbuXtbdDKqu3uWjQ1GpK39WW2hxbUAN4L3TxrwDyghEwBtUYZ8uK8LZh3tJ3pjWEpxng9tjfo7RT9BaZKV2T3EPvmZ6N1LgSdj",
-			"xpub6FJ6FAAFUzuWQAKyT98Ngs6UwsoPfPCdmepqX2aLLPT54M85ARsWzPciFd49foStMwhWgfiHP6PnMgPrWLrBJpUHgqw8vZPd5ov8uSfW2vo",
-		}
-		ourXPubIndex := uint32(0)
-		threshold := 1
-
-		inputWitnessScript, inputPkScript := multisigP2WSH(threshold, xpubs, false, 0)
-		changeWitnessScript, changePkScript := multisigP2WSH(threshold, xpubs, true, 0)
-
-		scriptConfig, err := NewBTCScriptConfigMultisig(uint32(threshold), xpubs, ourXPubIndex)
-		require.NoError(t, err)
-
-		// The multisig account has to be registered if not already.
-		registered, err := device.BTCIsScriptConfigRegistered(coin, scriptConfig, keypathAccount)
-		require.NoError(t, err)
-		require.False(t, registered)
-
-		err = device.BTCRegisterScriptConfig(coin, scriptConfig, keypathAccount, "My multisig account")
-		require.NoError(t, err)
+		inputWitnessScript, inputPkScript := multisigP2WSH(1, setup.Xpubs, false, 0)
+		changeWitnessScript, changePkScript := multisigP2WSH(1, setup.Xpubs, true, 0)
 
 		// Previous transaction with mixed outputs
 		prevTx := &wire.MsgTx{
@@ -1125,7 +1094,7 @@ func TestSimulatorBTCPSBTMultisig(t *testing.T) {
 		psbt_.Inputs[0].Bip32Derivation = []*psbt.Bip32Derivation{{
 			PubKey:               inputPubKey.SerializeCompressed(),
 			MasterKeyFingerprint: binary.LittleEndian.Uint32(fingerprint),
-			Bip32Path:            inputKeypath,
+			Bip32Path:            setup.ReceiveKeypath,
 		}}
 
 		// Setup change output (P2WSH multisig)
@@ -1133,13 +1102,13 @@ func TestSimulatorBTCPSBTMultisig(t *testing.T) {
 		psbt_.Outputs[0].Bip32Derivation = []*psbt.Bip32Derivation{{
 			PubKey:               changePubKey.SerializeCompressed(),
 			MasterKeyFingerprint: binary.LittleEndian.Uint32(fingerprint),
-			Bip32Path:            changeKeypath,
+			Bip32Path:            setup.ChangeKeypath,
 		}}
 
 		signOptions := &PSBTSignOptions{
 			ForceScriptConfig: &messages.BTCScriptConfigWithKeypath{
-				ScriptConfig: scriptConfig,
-				Keypath:      keypathAccount,
+				ScriptConfig: setup.ScriptConfig,
+				Keypath:      setup.KeypathAccount,
 			},
 		}
 		needsPrevTxs, err := device.BTCSignNeedsNonWitnessUTXOs(psbt_, signOptions)

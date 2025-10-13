@@ -990,47 +990,73 @@ func TestSimulatorSignBTCTransactionSendSelfDifferentAccount(t *testing.T) {
 	})
 }
 
+// setupMultisigAccount is a helper function that sets up a multisig account for testing.
+// It returns a struct containing the account details.
+type MultisigAccountSetup struct {
+	KeypathAccount []uint32
+	ReceiveKeypath []uint32
+	ChangeKeypath  []uint32
+	ScriptConfig   *messages.BTCScriptConfig
+	Xpubs          []string
+}
+
+func setupMultisigAccount(t *testing.T, device *Device, coin messages.BTCCoin) *MultisigAccountSetup {
+	t.Helper()
+
+	keypathAccount := []uint32{
+		48 + hardenedKeyStart,
+		0 + hardenedKeyStart,
+		0 + hardenedKeyStart,
+		2 + hardenedKeyStart,
+	}
+
+	receiveKeypath := append(append([]uint32{}, keypathAccount...), 0, 0)
+	changeKeypath := append(append([]uint32{}, keypathAccount...), 1, 0)
+
+	ourXPub, err := device.BTCXPub(coin, keypathAccount, messages.BTCPubRequest_XPUB, false)
+	require.NoError(t, err)
+
+	xpubs := []string{
+		ourXPub,
+		"xpub6Esa6esRHkbuXtbdDKqu3uWjQ1GpK39WW2hxbUAN4L3TxrwDyghEwBtUYZ8uK8LZh3tJ3pjWEpxng9tjfo7RT9BaZKV2T3EPvmZ6N1LgSdj",
+		"xpub6FJ6FAAFUzuWQAKyT98Ngs6UwsoPfPCdmepqX2aLLPT54M85ARsWzPciFd49foStMwhWgfiHP6PnMgPrWLrBJpUHgqw8vZPd5ov8uSfW2vo",
+	}
+
+	ourXPubIndex := uint32(0)
+	threshold := 1
+
+	scriptConfig, err := NewBTCScriptConfigMultisig(uint32(threshold), xpubs, ourXPubIndex)
+	require.NoError(t, err)
+
+	// The multisig account has to be registered if not already.
+	registered, err := device.BTCIsScriptConfigRegistered(coin, scriptConfig, keypathAccount)
+	require.NoError(t, err)
+	require.False(t, registered)
+
+	err = device.BTCRegisterScriptConfig(coin, scriptConfig, keypathAccount, "My multisig account")
+	require.NoError(t, err)
+
+	return &MultisigAccountSetup{
+		KeypathAccount: keypathAccount,
+		ReceiveKeypath: receiveKeypath,
+		ChangeKeypath:  changeKeypath,
+		ScriptConfig:   scriptConfig,
+		Xpubs:          xpubs,
+	}
+}
+
 // 1-of-3 multisig registration and address display/verification.
 func TestSimulatorBTCAddressMultisig(t *testing.T) {
 	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
 		t.Helper()
 
 		coin := messages.BTCCoin_BTC
-		keypathAccount := []uint32{
-			48 + hardenedKeyStart,
-			0 + hardenedKeyStart,
-			0 + hardenedKeyStart,
-			2 + hardenedKeyStart,
-		}
-
-		receiveKeypath := append(append([]uint32{}, keypathAccount...), 0, 0)
-
-		ourXPub, err := device.BTCXPub(coin, keypathAccount, messages.BTCPubRequest_XPUB, false)
-		require.NoError(t, err)
-
-		xpubs := []string{
-			ourXPub,
-			"xpub6Esa6esRHkbuXtbdDKqu3uWjQ1GpK39WW2hxbUAN4L3TxrwDyghEwBtUYZ8uK8LZh3tJ3pjWEpxng9tjfo7RT9BaZKV2T3EPvmZ6N1LgSdj",
-			"xpub6FJ6FAAFUzuWQAKyT98Ngs6UwsoPfPCdmepqX2aLLPT54M85ARsWzPciFd49foStMwhWgfiHP6PnMgPrWLrBJpUHgqw8vZPd5ov8uSfW2vo",
-		}
-		ourXPubIndex := uint32(0)
-		threshold := 1
-
-		scriptConfig, err := NewBTCScriptConfigMultisig(uint32(threshold), xpubs, ourXPubIndex)
-		require.NoError(t, err)
-
-		// The multisig account has to be registered if not already.
-		registered, err := device.BTCIsScriptConfigRegistered(coin, scriptConfig, keypathAccount)
-		require.NoError(t, err)
-		require.False(t, registered)
-
-		err = device.BTCRegisterScriptConfig(coin, scriptConfig, keypathAccount, "My multisig account")
-		require.NoError(t, err)
+		setup := setupMultisigAccount(t, device, coin)
 
 		address, err := device.BTCAddress(
 			coin,
-			receiveKeypath,
-			scriptConfig,
+			setup.ReceiveKeypath,
+			setup.ScriptConfig,
 			true,
 		)
 		require.NoError(t, err)
@@ -1094,39 +1120,9 @@ func TestSimulatorBTCSignMultisig(t *testing.T) {
 		t.Helper()
 		coin := messages.BTCCoin_BTC
 
-		keypathAccount := []uint32{
-			48 + hardenedKeyStart,
-			0 + hardenedKeyStart,
-			0 + hardenedKeyStart,
-			2 + hardenedKeyStart,
-		}
+		setup := setupMultisigAccount(t, device, coin)
 
-		changeKeypath := append(append([]uint32{}, keypathAccount...), 1, 0)
-		inputKeypath := append(append([]uint32{}, keypathAccount...), 0, 0)
-
-		ourXPub, err := device.BTCXPub(coin, keypathAccount, messages.BTCPubRequest_XPUB, false)
-		require.NoError(t, err)
-
-		xpubs := []string{
-			ourXPub,
-			"xpub6Esa6esRHkbuXtbdDKqu3uWjQ1GpK39WW2hxbUAN4L3TxrwDyghEwBtUYZ8uK8LZh3tJ3pjWEpxng9tjfo7RT9BaZKV2T3EPvmZ6N1LgSdj",
-			"xpub6FJ6FAAFUzuWQAKyT98Ngs6UwsoPfPCdmepqX2aLLPT54M85ARsWzPciFd49foStMwhWgfiHP6PnMgPrWLrBJpUHgqw8vZPd5ov8uSfW2vo",
-		}
-		ourXPubIndex := uint32(0)
-		threshold := 1
-
-		_, inputPkScript := multisigP2WSH(threshold, xpubs, false, 0)
-
-		scriptConfig, err := NewBTCScriptConfigMultisig(uint32(threshold), xpubs, ourXPubIndex)
-		require.NoError(t, err)
-
-		// The multisig account has to be registered if not already.
-		registered, err := device.BTCIsScriptConfigRegistered(coin, scriptConfig, keypathAccount)
-		require.NoError(t, err)
-		require.False(t, registered)
-
-		err = device.BTCRegisterScriptConfig(coin, scriptConfig, keypathAccount, "My multisig account")
-		require.NoError(t, err)
+		_, inputPkScript := multisigP2WSH(1, setup.Xpubs, false, 0)
 
 		prevTx := &wire.MsgTx{
 			Version: 2,
@@ -1148,14 +1144,14 @@ func TestSimulatorBTCSignMultisig(t *testing.T) {
 
 		scriptConfigs := []*messages.BTCScriptConfigWithKeypath{
 			{
-				ScriptConfig: scriptConfig,
-				Keypath:      keypathAccount,
+				ScriptConfig: setup.ScriptConfig,
+				Keypath:      setup.KeypathAccount,
 			},
 		}
 		require.True(t, BTCSignNeedsPrevTxs(scriptConfigs))
 
 		prevTxHash := prevTx.TxHash()
-		_, err = device.BTCSign(
+		_, err := device.BTCSign(
 			coin,
 			scriptConfigs,
 			nil,
@@ -1168,7 +1164,7 @@ func TestSimulatorBTCSignMultisig(t *testing.T) {
 							PrevOutIndex:      0,
 							PrevOutValue:      uint64(prevTx.TxOut[0].Value),
 							Sequence:          0xFFFFFFFF,
-							Keypath:           inputKeypath,
+							Keypath:           setup.ReceiveKeypath,
 							ScriptConfigIndex: 0,
 						},
 						PrevTx: convertedPrevTx,
@@ -1178,7 +1174,7 @@ func TestSimulatorBTCSignMultisig(t *testing.T) {
 					{
 						Ours:    true,
 						Value:   70_000_000,
-						Keypath: changeKeypath,
+						Keypath: setup.ChangeKeypath,
 					},
 					{
 						Value:   20_000_000,
