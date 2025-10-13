@@ -18,6 +18,7 @@ package firmware
 import (
 	"bytes"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/messages"
@@ -72,6 +73,44 @@ func p2shPkScript(redeemScript []byte) []byte {
 		panic(err)
 	}
 	return pkScript
+}
+
+// P2WSH multisig witnessScript and pubkeyScript from these xpubs, derived at /<0;1>/*.
+// The pubkeys will be sorted lexicographically.
+func multisigP2WSH(threshold int, xpubs []string, change bool, index uint32) ([]byte, []byte) {
+	pubkeys := make([]*btcutil.AddressPubKey, len(xpubs))
+	for i, xpubStr := range xpubs {
+		changeIndex := uint32(0)
+		if change {
+			changeIndex = 1
+		}
+		xpub := mustXpub(xpubStr, changeIndex, index)
+		pubKey, err := xpub.ECPubKey()
+		if err != nil {
+			panic(err)
+		}
+		addrPubKey, err := btcutil.NewAddressPubKey(pubKey.SerializeCompressed(), &chaincfg.MainNetParams)
+		if err != nil {
+			panic(err)
+		}
+		pubkeys[i] = addrPubKey
+	}
+	slices.SortFunc(pubkeys, func(a, b *btcutil.AddressPubKey) int {
+		return bytes.Compare(a.ScriptAddress(), b.ScriptAddress())
+	})
+	witnessScript, err := txscript.MultiSigScript(pubkeys, threshold)
+	if err != nil {
+		panic(err)
+	}
+	addr, err := btcutil.NewAddressWitnessScriptHash(chainhash.HashB(witnessScript), &chaincfg.MainNetParams)
+	if err != nil {
+		panic(err)
+	}
+	pkScript, err := txscript.PayToAddrScript(addr)
+	if err != nil {
+		panic(err)
+	}
+	return witnessScript, pkScript
 }
 
 //nolint:unparam
@@ -210,14 +249,27 @@ func TestSimulatorBTCAddress(t *testing.T) {
 	})
 }
 
+func mustXpub(xpubStr string, keypath ...uint32) *hdkeychain.ExtendedKey {
+	xpub, err := hdkeychain.NewKeyFromString(xpubStr)
+	if err != nil {
+		panic(err)
+	}
+	for _, childIndex := range keypath {
+		xpub, err = xpub.Derive(childIndex)
+		if err != nil {
+			panic(err)
+		}
+	}
+	return xpub
+}
+
 func simulatorPub(t *testing.T, device *Device, keypath ...uint32) *btcec.PublicKey {
 	t.Helper()
 
 	xpubStr, err := device.BTCXPub(messages.BTCCoin_BTC, keypath, messages.BTCPubRequest_XPUB, false)
 	require.NoError(t, err)
 
-	xpub, err := hdkeychain.NewKeyFromString(xpubStr)
-	require.NoError(t, err)
+	xpub := mustXpub(xpubStr)
 	pubKey, err := xpub.ECPubKey()
 	require.NoError(t, err)
 	return pubKey
@@ -935,5 +987,205 @@ func TestSimulatorSignBTCTransactionSendSelfDifferentAccount(t *testing.T) {
 			stdOut.String(),
 			"This BitBox (account #2): bc1pzeyhtmk2d5jrjunam30dus0p34095m622dq7trm7r0g8pwac2gvqxh8d47",
 		)
+	})
+}
+
+// setupMultisigAccount is a helper function that sets up a multisig account for testing.
+// It returns a struct containing the account details.
+type MultisigAccountSetup struct {
+	KeypathAccount []uint32
+	ReceiveKeypath []uint32
+	ChangeKeypath  []uint32
+	ScriptConfig   *messages.BTCScriptConfig
+	Xpubs          []string
+}
+
+func setupMultisigAccount(t *testing.T, device *Device, coin messages.BTCCoin) *MultisigAccountSetup {
+	t.Helper()
+
+	keypathAccount := []uint32{
+		48 + hardenedKeyStart,
+		0 + hardenedKeyStart,
+		0 + hardenedKeyStart,
+		2 + hardenedKeyStart,
+	}
+
+	receiveKeypath := append(append([]uint32{}, keypathAccount...), 0, 0)
+	changeKeypath := append(append([]uint32{}, keypathAccount...), 1, 0)
+
+	ourXPub, err := device.BTCXPub(coin, keypathAccount, messages.BTCPubRequest_XPUB, false)
+	require.NoError(t, err)
+
+	xpubs := []string{
+		ourXPub,
+		"xpub6Esa6esRHkbuXtbdDKqu3uWjQ1GpK39WW2hxbUAN4L3TxrwDyghEwBtUYZ8uK8LZh3tJ3pjWEpxng9tjfo7RT9BaZKV2T3EPvmZ6N1LgSdj",
+		"xpub6FJ6FAAFUzuWQAKyT98Ngs6UwsoPfPCdmepqX2aLLPT54M85ARsWzPciFd49foStMwhWgfiHP6PnMgPrWLrBJpUHgqw8vZPd5ov8uSfW2vo",
+	}
+
+	ourXPubIndex := uint32(0)
+	threshold := 1
+
+	scriptConfig, err := NewBTCScriptConfigMultisig(uint32(threshold), xpubs, ourXPubIndex)
+	require.NoError(t, err)
+
+	// The multisig account has to be registered if not already.
+	registered, err := device.BTCIsScriptConfigRegistered(coin, scriptConfig, keypathAccount)
+	require.NoError(t, err)
+	require.False(t, registered)
+
+	err = device.BTCRegisterScriptConfig(coin, scriptConfig, keypathAccount, "My multisig account")
+	require.NoError(t, err)
+
+	return &MultisigAccountSetup{
+		KeypathAccount: keypathAccount,
+		ReceiveKeypath: receiveKeypath,
+		ChangeKeypath:  changeKeypath,
+		ScriptConfig:   scriptConfig,
+		Xpubs:          xpubs,
+	}
+}
+
+// 1-of-3 multisig registration and address display/verification.
+func TestSimulatorBTCAddressMultisig(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
+		t.Helper()
+
+		coin := messages.BTCCoin_BTC
+		setup := setupMultisigAccount(t, device, coin)
+
+		address, err := device.BTCAddress(
+			coin,
+			setup.ReceiveKeypath,
+			setup.ScriptConfig,
+			true,
+		)
+		require.NoError(t, err)
+		require.Equal(t, "bc1qdhqnu2arm9al7uv687amuesk5det5nxx0k9ed30x2u8zjsfnsfyqzlsrsu", address)
+		if device.Version().AtLeast(semver.NewSemVer(9, 20, 0)) {
+			// Before simulator v9.20, address confirmation data was not written to stdout.
+			require.Contains(t,
+				stdOut.String(),
+				`TITLE: Register
+BODY: 1-of-3
+Bitcoin multisig
+CONFIRM SCREEN END
+CONFIRM SCREEN START
+TITLE: Register
+BODY: My multisig account
+CONFIRM SCREEN END
+CONFIRM SCREEN START
+TITLE: Register
+BODY: p2wsh
+at
+m/48'/0'/0'/2'
+CONFIRM SCREEN END
+CONFIRM SCREEN START
+TITLE: Register
+BODY: Cosigner 1/3 (this device): Zpub74CYNJGx5QwGYeXket9qEbWbEhMNCL1d1Za3eXpABKXMWNVDhTZmovUkzBa74SCrZruMQLGQ6Zce9HzJUaLoF8QPkRU7CVfSSqNZ7Qy2BB5
+CONFIRM SCREEN END
+CONFIRM SCREEN START
+TITLE: Register
+BODY: Cosigner 2/3: Zpub75SBqDwhA5FEf49Epht8JA3YTjbyQdp6eXQ55XDgC7ddhF8bFQQeGS4gPg1YsNsJjoBtRMvk3N4PZtjdQR6QC6fT8TzH2GLNMwxFj3Rnnzx
+CONFIRM SCREEN END
+CONFIRM SCREEN START
+TITLE: Register
+BODY: Cosigner 3/3: Zpub75rhyjEXMKYqXKsb4XAbw7dJ1c8YkysDv9Wx15deUB3EnjKSS9avKdnv6jvoE3ydQh174CuXBdVPFREkExqA3mxAFzSPVnVbWzKJGVWvYXJ
+CONFIRM SCREEN END
+STATUS SCREEN START
+TITLE: Multisig account
+registered
+STATUS SCREEN END
+CONFIRM SCREEN START
+TITLE: Receive to
+BODY: 1-of-3
+Bitcoin multisig
+CONFIRM SCREEN END
+CONFIRM SCREEN START
+TITLE: Receive to
+BODY: My multisig account
+CONFIRM SCREEN END
+CONFIRM SCREEN START
+TITLE: Receive to
+BODY: bc1qdhqnu2arm9al7uv687amuesk5det5nxx0k9ed30x2u8zjsfnsfyqzlsrsu
+CONFIRM SCREEN END
+`,
+			)
+		}
+	})
+}
+
+// 1-of-3 P2WSH multisig spend
+func TestSimulatorBTCSignMultisig(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
+		t.Helper()
+		coin := messages.BTCCoin_BTC
+
+		setup := setupMultisigAccount(t, device, coin)
+
+		_, inputPkScript := multisigP2WSH(1, setup.Xpubs, false, 0)
+
+		prevTx := &wire.MsgTx{
+			Version: 2,
+			TxIn: []*wire.TxIn{
+				{
+					PreviousOutPoint: *mustOutpoint("3131313131313131313131313131313131313131313131313131313131313131:0"),
+					Sequence:         0xFFFFFFFF,
+				},
+			},
+			TxOut: []*wire.TxOut{
+				{
+					Value:    100_000_000,
+					PkScript: inputPkScript,
+				},
+			},
+			LockTime: 0,
+		}
+		convertedPrevTx := NewBTCPrevTxFromBtcd(prevTx)
+
+		scriptConfigs := []*messages.BTCScriptConfigWithKeypath{
+			{
+				ScriptConfig: setup.ScriptConfig,
+				Keypath:      setup.KeypathAccount,
+			},
+		}
+		require.True(t, BTCSignNeedsPrevTxs(scriptConfigs))
+
+		prevTxHash := prevTx.TxHash()
+		_, err := device.BTCSign(
+			coin,
+			scriptConfigs,
+			nil,
+			&BTCTx{
+				Version: 2,
+				Inputs: []*BTCTxInput{
+					{
+						Input: &messages.BTCSignInputRequest{
+							PrevOutHash:       prevTxHash[:],
+							PrevOutIndex:      0,
+							PrevOutValue:      uint64(prevTx.TxOut[0].Value),
+							Sequence:          0xFFFFFFFF,
+							Keypath:           setup.ReceiveKeypath,
+							ScriptConfigIndex: 0,
+						},
+						PrevTx: convertedPrevTx,
+					},
+				},
+				Outputs: []*messages.BTCSignOutputRequest{
+					{
+						Ours:    true,
+						Value:   70_000_000,
+						Keypath: setup.ChangeKeypath,
+					},
+					{
+						Value:   20_000_000,
+						Payload: []byte("11111111111111111111111111111111"),
+						Type:    messages.BTCOutputType_P2WSH,
+					},
+				},
+				Locktime: 0,
+			},
+			messages.BTCSignInitRequest_DEFAULT,
+		)
+		require.NoError(t, err)
 	})
 }
