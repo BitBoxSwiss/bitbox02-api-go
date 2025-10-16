@@ -36,4 +36,4 @@ you can run:
     SIMULATOR=/path/to/simulator go test -v -run TestSimulator ./...
 
 In this case, only the given simulator will be used, and the ones defined in simulators.json will be
-ignored.
+ignored. Make sure to use an absolute path to the simulator.
