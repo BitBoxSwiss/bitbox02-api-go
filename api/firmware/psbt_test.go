@@ -1018,7 +1018,7 @@ func TestSimulatorBTCPSBTPaymentRequest(t *testing.T) {
 
 		needsPrevTxs, err := device.BTCSignNeedsNonWitnessUTXOs(psbt_, signOptions)
 		require.NoError(t, err)
-		require.False(t, needsPrevTxs)
+		require.True(t, needsPrevTxs)
 
 		// Sign & validate
 		require.NoError(t, device.BTCSignPSBT(messages.BTCCoin_TBTC, psbt_, signOptions))
