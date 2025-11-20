@@ -617,6 +617,95 @@ func TestSimulatorBTCPSBTMixedSpend(t *testing.T) {
 	})
 }
 
+func TestSimulatorBTCSignPSBTOpReturn(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
+		t.Helper()
+
+		if !device.Version().AtLeast(semver.NewSemVer(9, 24, 0)) {
+			t.Skip("OP_RETURN support was added in v9.24.0")
+		}
+
+		fingerprint, err := device.RootFingerprint()
+		require.NoError(t, err)
+
+		inputPath := []uint32{84 + HARDENED, 1 + HARDENED, 0 + HARDENED, 0, 5}
+		changePath := []uint32{84 + HARDENED, 1 + HARDENED, 0 + HARDENED, 1, 0}
+
+		inputPub := simulatorPub(t, device, inputPath...)
+		changePub := simulatorPub(t, device, changePath...)
+
+		prevTx := &wire.MsgTx{
+			Version:  2,
+			LockTime: 0,
+			TxIn: []*wire.TxIn{{
+				PreviousOutPoint: *mustOutpoint("3131313131313131313131313131313131313131313131313131313131313131:0"),
+				Sequence:         0xFFFFFFFF,
+			}},
+			TxOut: []*wire.TxOut{{
+				Value:    50_000_000,
+				PkScript: p2wpkhPkScript(inputPub),
+			}},
+		}
+
+		opReturnData := []byte("hello world")
+		opReturnScript, err := txscript.NewScriptBuilder().
+			AddOp(txscript.OP_RETURN).
+			AddData(opReturnData).
+			Script()
+		require.NoError(t, err)
+
+		tx := &wire.MsgTx{
+			Version:  2,
+			LockTime: 0,
+			TxIn: []*wire.TxIn{{
+				PreviousOutPoint: wire.OutPoint{
+					Hash:  prevTx.TxHash(),
+					Index: 0,
+				},
+				Sequence: 0xFFFFFFFF,
+			}},
+			TxOut: []*wire.TxOut{
+				{
+					Value:    49_000_000,
+					PkScript: p2wpkhPkScript(changePub),
+				},
+				{
+					Value:    0,
+					PkScript: opReturnScript,
+				},
+			},
+		}
+
+		psbt_, err := psbt.NewFromUnsignedTx(tx)
+		require.NoError(t, err)
+
+		psbt_.Inputs[0].NonWitnessUtxo = prevTx
+		psbt_.Inputs[0].WitnessUtxo = prevTx.TxOut[0]
+		psbt_.Inputs[0].Bip32Derivation = []*psbt.Bip32Derivation{{
+			PubKey:               inputPub.SerializeCompressed(),
+			MasterKeyFingerprint: binary.LittleEndian.Uint32(fingerprint),
+			Bip32Path:            inputPath,
+		}}
+
+		psbt_.Outputs[0].Bip32Derivation = []*psbt.Bip32Derivation{{
+			PubKey:               changePub.SerializeCompressed(),
+			MasterKeyFingerprint: binary.LittleEndian.Uint32(fingerprint),
+			Bip32Path:            changePath,
+		}}
+
+		needsPrevTxs, err := device.BTCSignNeedsNonWitnessUTXOs(psbt_, nil)
+		require.NoError(t, err)
+		require.True(t, needsPrevTxs)
+
+		require.NoError(t, device.BTCSignPSBT(messages.BTCCoin_TBTC, psbt_, nil))
+		require.NoError(t, psbt.MaybeFinalizeAll(psbt_))
+		require.NoError(t, txValidityCheck(psbt_))
+
+		require.Contains(t, stdOut.String(), "TITLE: OP_RETURN")
+		require.Contains(t, stdOut.String(), "BODY: hello world")
+	})
+}
+
 func TestSimulatorBTCPSBTSilentPayment(t *testing.T) {
 	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
 		t.Helper()
