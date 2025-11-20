@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/common"
+	"github.com/BitBoxSwiss/bitbox02-api-go/util/semver"
 	"github.com/stretchr/testify/require"
 )
 
@@ -56,4 +57,19 @@ func TestSimulatorSetPassword(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestSimulatorChangePassword(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
+		t.Helper()
+		err := device.ChangePassword()
+		if device.Version().AtLeast(semver.NewSemVer(9, 25, 0)) {
+			require.NoError(t, err)
+			// Status should remain StatusInitialized
+			require.Equal(t, StatusInitialized, device.Status())
+		} else {
+			// Old firmware versions don't support ChangePassword
+			require.EqualError(t, err, UnsupportedError("9.25.0").Error())
+		}
+	})
 }
