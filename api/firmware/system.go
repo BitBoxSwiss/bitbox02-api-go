@@ -76,7 +76,7 @@ func (device *Device) DeviceInfo() (*DeviceInfo, error) {
 	if device.version.AtLeast(semver.NewSemVer(9, 25, 0)) {
 		deviceInfo.PasswordStretchingAlgo = deviceInfoResponse.DeviceInfo.PasswordStretchingAlgo
 	} else {
-		deviceInfo.PasswordStretchingAlgo = "V0"
+		deviceInfo.PasswordStretchingAlgo = "V1"
 	}
 
 	return deviceInfo, nil
