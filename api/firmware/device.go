@@ -120,6 +120,9 @@ type DeviceInfo struct {
 	SecurechipModel string `json:"securechipModel"`
 	// Available on Bluetooth-enabled devices, Will be `nil` otherwise.
 	Bluetooth *BluetoothInfo `json:"bluetooth"`
+	// This information is only available since firmwae v9.25.0. Will be an empty string for older
+	// firmware versions.
+	PasswordStretchingAlgo string `json:"passwordStretchingAlgo"`
 }
 
 // NewDevice creates a new instance of Device.
