@@ -72,6 +72,13 @@ func (device *Device) DeviceInfo() (*DeviceInfo, error) {
 		Bluetooth:                 bluetooth,
 	}
 
+	// Before v9.25.0, this field did not exist and there was only one stretching algo.
+	if device.version.AtLeast(semver.NewSemVer(9, 25, 0)) {
+		deviceInfo.PasswordStretchingAlgo = deviceInfoResponse.DeviceInfo.PasswordStretchingAlgo
+	} else {
+		deviceInfo.PasswordStretchingAlgo = "V0"
+	}
+
 	return deviceInfo, nil
 }
 
