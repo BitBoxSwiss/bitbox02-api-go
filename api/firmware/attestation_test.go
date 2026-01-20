@@ -48,9 +48,9 @@ func makeCertificate(rootPrivkey *btcec.PrivateKey, bootloaderHash []byte, devic
 func p256PrivKeyFromBytes(k []byte) *ecdsa.PrivateKey {
 	priv := new(ecdsa.PrivateKey)
 	c := elliptic.P256()
-	priv.PublicKey.Curve = c
+	priv.Curve = c
 	priv.D = new(big.Int).SetBytes(k)
-	priv.PublicKey.X, priv.PublicKey.Y = c.ScalarBaseMult(k)
+	priv.X, priv.Y = c.ScalarBaseMult(k)
 	return priv
 }
 

@@ -1,6 +1,6 @@
 module github.com/BitBoxSwiss/bitbox02-api-go
 
-go 1.22
+go 1.24
 
 require (
 	github.com/benma/miniscript-go v0.0.0-20240226152043-f7c34099edf9
