@@ -13,7 +13,7 @@ jobs:
       - name: Clone the repo
         uses: actions/checkout@v4
       - name: Enable caching
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           # Increment cache number to invalidate.
           key: ${{runner.os}}-cache-1
@@ -39,7 +39,7 @@ jobs:
       - name: Clone the repo
         uses: actions/checkout@v4
       - name: Enable caching
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           # Increment cache number to invalidate.
           key: ${{runner.os}}-cache-1
@@ -48,7 +48,7 @@ jobs:
             ~/.cache/go-build
             ~/.cache/golangci-lint
       - name: Enable simulators caching
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           key: ${{runner.os}}-simulators-cache-${{hashFiles('./api/firmware/testdata/simulators.json')}}
           path: |
@@ -67,7 +67,7 @@ jobs:
       - name: Clone the repo
         uses: actions/checkout@v4
       - name: Enable caching
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           # Increment cache number to invalidate.
           key: ${{runner.os}}-cache-1
