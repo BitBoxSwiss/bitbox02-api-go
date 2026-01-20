@@ -1,134 +1,103 @@
-# See reference docs for details:
-# https://golangci-lint.run/usage/configuration/
-
-# options for analysis running
+version: "2"
 run:
-  # default concurrency is a available CPU number
   concurrency: 4
-
-  # timeout for analysis, e.g. 30s, 5m, default is 1m
-  deadline: 10m
-
-  # exit code when at least one issue was found, default is 1
   issues-exit-code: 1
-
-  # include test files or not, default is true
   tests: true
-
-# output configuration options
-output:
-  # print lines of code with issue, default is true
-  print-issued-lines: true
-
-  # print linter name in the end of issue text, default is true
-  print-linter-name: true
-
-
-# all available settings of specific linters
-linters-settings:
-  gocritic:
-    enabled-checks:
-      - builtinShadow
-      - nilValReturn
-      - rangeExprCopy
-      - rangeValCopy
-      - typeUnparen
-  gocyclo:
-    min-complexity: 29
-  maligned:
-    # print struct with more effective memory layout or not, false by default
-    suggest-new: true
-  dupl:
-    # tokens count to trigger issue, 150 by default
-    threshold: 150
-  goconst:
-    # minimal length of string constant, 3 by default
-    min-len: 3
-    # minimal occurrences count to trigger, 3 by default
-    min-occurrences: 3
-  misspell:
-    # Correct spellings using locale preferences for US or UK.
-    # Default is to use a neutral variety of English.
-    # Setting locale to US will correct the British spelling of 'colour' to 'color'.
-    locale: US
-  lll:
-    # max line length, lines longer will be reported. Default is 120.
-    # '\t' is counted as 1 character by default, and can be changed with the tab-width option
-    line-length: 120
-    # allow long comments.
-    exclude: '//'
-
 linters:
-  enable-all: true
+  default: all
   disable:
-    - gosec
     - bodyclose
+    - cyclop
+    - depguard
     - dogsled
     - dupl
+    - err113
+    - errname
+    - errorlint
+    - exhaustive
+    - exhaustruct
+    - forbidigo
+    - forcetypeassert
+    - funcorder
     - funlen
     - gochecknoglobals
     - gochecknoinits
     - gocognit
-    - godox
-    - lll
-    - nestif
-    - prealloc
-    - stylecheck
-    - whitespace
-    - wsl
-    - ireturn
-    - err113
-    - wrapcheck
-    - varnamelen
-    - tagliatelle
-    - paralleltest
-    - nonamedreturns
-    - noctx
-    - nlreturn
-    - cyclop
-    - exhaustive
-    - nilnil
-    - nilerr
-    - forcetypeassert
-    - exhaustruct
-    - maintidx
-    - errorlint
-    - gofumpt
-    - gci
-    - errname
-    - forbidigo
-    - makezero
-    - nolintlint
     - gocyclo
-    - interfacebloat
-    - revive
-    - musttag
-    - depguard
-    - protogetter
+    - godox
+    - gosec
     - gosmopolitan
     - inamedparam
-    # could not find a way to disable float-compare: https://github.com/golangci/golangci-lint/issues/4187
-    - testifylint
+    - interfacebloat
+    - ireturn
+    - lll
+    - maintidx
+    - makezero
     - mnd
-  disable-all: false
-
-issues:
-  # List of regexps of issue texts to exclude, empty list by default.
-  # But independently from this option we use default exclude patterns,
-  # it can be disabled by `exclude-use-default: false`. To list all
-  # excluded by default patterns execute `golangci-lint run --help`
-  exclude:
-  # Use linters in their original configuration. golangci-linter changes the default config, for
-  # example skipping the docstring comment checks of golint.
-  exclude-use-default: false
-
-  # Excluding configuration per-path, per-linter, per-text and per-source.
-  exclude-rules:
-    # In addition to always disalbed linters above, exclude some more in tests.
-    - path: _test\.go
-      linters:
-        - errcheck
-        - gocyclo
-        - godot
-        - gosec
-        - testpackage
+    - modernize
+    - musttag
+    - nestif
+    - nilerr
+    - nilnil
+    - nlreturn
+    - noctx
+    - noinlineerr
+    - nolintlint
+    - nonamedreturns
+    - paralleltest
+    - perfsprint
+    - prealloc
+    - protogetter
+    - revive
+    - tagliatelle
+    - testifylint
+    - varnamelen
+    - whitespace
+    - wrapcheck
+    - wsl
+    - wsl_v5
+  settings:
+    dupl:
+      threshold: 150
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+    gocritic:
+      enabled-checks:
+        - builtinShadow
+        - nilValReturn
+        - rangeExprCopy
+        - rangeValCopy
+        - typeUnparen
+    gocyclo:
+      min-complexity: 29
+    lll:
+      line-length: 120
+    misspell:
+      locale: US
+  exclusions:
+    generated: lax
+    rules:
+      - linters:
+          - errcheck
+          - gocyclo
+          - godot
+          - gosec
+          - testpackage
+        path: _test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+      - cmd/playground
+      - cmd/miniscript
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
