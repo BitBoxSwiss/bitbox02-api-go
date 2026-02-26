@@ -44,6 +44,14 @@ func ComputePaymentRequestSighash(
 		case *messages.BTCPaymentRequestRequest_Memo_TextMemo_:
 			_ = binary.Write(sighash, binary.LittleEndian, uint32(1))
 			hashDataLenPrefixed(sighash, []byte(m.TextMemo.Note))
+		case *messages.BTCPaymentRequestRequest_Memo_CoinPurchaseMemo_:
+			// CoinPurchaseMemo type = 3 in SLIP-24 (not the protobuf field number!)
+			_ = binary.Write(sighash, binary.LittleEndian, uint32(3))
+			// Hash the SLIP-24 fields: coin_type, amount, address
+			_ = binary.Write(sighash, binary.LittleEndian, m.CoinPurchaseMemo.CoinType)
+			hashDataLenPrefixed(sighash, []byte(m.CoinPurchaseMemo.Amount))
+			hashDataLenPrefixed(sighash, []byte(m.CoinPurchaseMemo.Address))
+			// Note: address_derivation field is NOT hashed.
 		default:
 			return nil, errors.New("unsupported memo type")
 		}
