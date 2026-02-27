@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/messages"
+	"github.com/BitBoxSwiss/bitbox02-api-go/util/semver"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/sha3"
 )
@@ -17,6 +18,53 @@ func hashKeccak(b []byte) []byte {
 	h.Write(b)
 	return h.Sum(nil)
 }
+
+var eip712Msg = []byte(`
+{
+    "types": {
+        "EIP712Domain": [
+            { "name": "name", "type": "string" },
+            { "name": "version", "type": "string" },
+            { "name": "chainId", "type": "uint256" },
+            { "name": "verifyingContract", "type": "address" }
+        ],
+        "Attachment": [
+            { "name": "contents", "type": "string" }
+        ],
+        "Person": [
+            { "name": "name", "type": "string" },
+            { "name": "wallet", "type": "address" },
+            { "name": "age", "type": "uint8" }
+        ],
+        "Mail": [
+            { "name": "from", "type": "Person" },
+            { "name": "to", "type": "Person" },
+            { "name": "contents", "type": "string" },
+            { "name": "attachments", "type": "Attachment[]" }
+        ]
+    },
+    "primaryType": "Mail",
+    "domain": {
+        "name": "Ether Mail",
+        "version": "1",
+        "chainId": 1,
+        "verifyingContract": "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"
+    },
+    "message": {
+        "from": {
+            "name": "Cow",
+            "wallet": "0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826",
+            "age": 20
+        },
+        "to": {
+            "name": "Bob",
+            "wallet": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+            "age": "0x1e"
+        },
+        "contents": "Hello, Bob!",
+        "attachments": [{ "contents": "attachment1" }, { "contents": "attachment2" }]
+    }
+}`)
 
 func parseTypeNoErr(t *testing.T, typ string, types map[string]interface{}) *messages.ETHSignTypedMessageRequest_MemberType {
 	t.Helper()
@@ -306,53 +354,6 @@ func TestSimulatorETHSignMessage(t *testing.T) {
 func TestSimulatorETHSignTypedMessage(t *testing.T) {
 	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
 		t.Helper()
-		msg := []byte(`
-{
-    "types": {
-        "EIP712Domain": [
-            { "name": "name", "type": "string" },
-            { "name": "version", "type": "string" },
-            { "name": "chainId", "type": "uint256" },
-            { "name": "verifyingContract", "type": "address" }
-        ],
-        "Attachment": [
-            { "name": "contents", "type": "string" }
-        ],
-        "Person": [
-            { "name": "name", "type": "string" },
-            { "name": "wallet", "type": "address" },
-            { "name": "age", "type": "uint8" }
-        ],
-        "Mail": [
-            { "name": "from", "type": "Person" },
-            { "name": "to", "type": "Person" },
-            { "name": "contents", "type": "string" },
-            { "name": "attachments", "type": "Attachment[]" }
-        ]
-    },
-    "primaryType": "Mail",
-    "domain": {
-        "name": "Ether Mail",
-        "version": "1",
-        "chainId": 1,
-        "verifyingContract": "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"
-    },
-    "message": {
-        "from": {
-            "name": "Cow",
-            "wallet": "0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826",
-            "age": 20
-        },
-        "to": {
-            "name": "Bob",
-            "wallet": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
-            "age": "0x1e"
-        },
-        "contents": "Hello, Bob!",
-        "attachments": [{ "contents": "attachment1" }, { "contents": "attachment2" }]
-    }
-}`)
-
 		sig, err := device.ETHSignTypedMessage(
 			1,
 			[]uint32{
@@ -362,10 +363,61 @@ func TestSimulatorETHSignTypedMessage(t *testing.T) {
 				0,
 				10,
 			},
-			msg,
+			eip712Msg,
+			true,
 		)
 		require.NoError(t, err)
 		require.Len(t, sig, 65)
+	})
+}
+
+func TestSimulatorETHSignTypedMessageAntikleptoEnabled(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
+		t.Helper()
+		keypath := []uint32{
+			44 + hardenedKeyStart,
+			60 + hardenedKeyStart,
+			0 + hardenedKeyStart,
+			0,
+			10,
+		}
+
+		sig1, err := device.ETHSignTypedMessage(1, keypath, eip712Msg, true)
+		require.NoError(t, err)
+		sig2, err := device.ETHSignTypedMessage(1, keypath, eip712Msg, true)
+		require.NoError(t, err)
+
+		require.Len(t, sig1, 65)
+		require.Len(t, sig2, 65)
+		require.NotEqual(t, sig1, sig2)
+	})
+}
+
+func TestSimulatorETHSignTypedMessageAntikleptoDisabled(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
+		t.Helper()
+		keypath := []uint32{
+			44 + hardenedKeyStart,
+			60 + hardenedKeyStart,
+			0 + hardenedKeyStart,
+			0,
+			10,
+		}
+
+		if device.Version().AtLeast(semver.NewSemVer(9, 26, 0)) {
+			sig1, err := device.ETHSignTypedMessage(1, keypath, eip712Msg, false)
+			require.NoError(t, err)
+			sig2, err := device.ETHSignTypedMessage(1, keypath, eip712Msg, false)
+			require.NoError(t, err)
+
+			require.Len(t, sig1, 65)
+			require.Len(t, sig2, 65)
+			require.Equal(t, sig1, sig2)
+			return
+		}
+
+		_, err := device.ETHSignTypedMessage(1, keypath, eip712Msg, false)
+		require.EqualError(t, err, UnsupportedError("9.26.0").Error())
 	})
 }
 
