@@ -267,6 +267,7 @@ func main() {
         "attachments": [{ "contents": "attachment1" }, { "contents": "attachment2" }]
     }
 }`),
+		true,
 	)
 	errpanic(err)
 	fmt.Println(sig)

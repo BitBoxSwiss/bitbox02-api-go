@@ -458,6 +458,10 @@ func TestBTCSignMessage(t *testing.T) {
 			}
 		}
 		// Mock host nonce.
+		prevGenerateHostNonce := generateHostNonce
+		t.Cleanup(func() {
+			generateHostNonce = prevGenerateHostNonce
+		})
 		generateHostNonce = func() ([]byte, error) {
 			return hostNonce, nil
 		}
