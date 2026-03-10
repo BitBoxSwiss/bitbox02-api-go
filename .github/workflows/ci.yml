@@ -22,7 +22,7 @@ jobs:
             ~/.cache/go-build
             ~/.cache/golangci-lint
       - name: Install Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v6
         with:
           go-version: ${{env.GO_VERSION}}
       # Keep the linter version and its config in .golangci.yml in sync with the app repo at
@@ -54,7 +54,7 @@ jobs:
           path: |
             ./api/firmware/testdata/simulators
       - name: Install Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v6
         with:
           go-version: ${{env.GO_VERSION}}
       - name: Test
@@ -76,7 +76,7 @@ jobs:
             ~/.cache/go-build
             ~/.cache/golangci-lint
       - name: Install Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v6
         with:
           go-version: ${{env.GO_VERSION}}
       - name: Build
