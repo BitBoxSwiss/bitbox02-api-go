@@ -54,7 +54,7 @@ func p256PrivKeyFromBytes(k []byte) *ecdsa.PrivateKey {
 	return priv
 }
 
-func TestAttestation(t *testing.T) {
+func TestPerformAttestation(t *testing.T) {
 
 	// Arbitrary values, they do not have any special meaning.
 	// identifier is the sha256 hash of the uncompressed pubkey.
@@ -100,7 +100,7 @@ func TestAttestation(t *testing.T) {
 
 	// Invalid response status code.
 	communication.MockQuery = func([]byte) ([]byte, error) {
-		response := make([]byte, 1+32+64+64+32+64)
+		response := make([]byte, 1+attestationPayloadLength)
 		response[0] = 0x01
 		return response, nil
 	}
@@ -191,4 +191,147 @@ func TestAttestation(t *testing.T) {
 	success, err = device.performAttestation()
 	require.NoError(t, err)
 	require.True(t, success)
+}
+
+func TestVerifyAttestation(t *testing.T) {
+	// Arbitrary values, they do not have any special meaning.
+	// identifier is the sha256 hash of the uncompressed pubkey.
+	challenge := unhex("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")
+	rootPubkeyIdentifier := unhex("11554d841e74066eebc3556ed6dea4d6ceef3940009222c77c3b966349989de1")
+	rootPrivateKey, rootPublicKey := btcec.PrivKeyFromBytes(
+		unhex("15608dfed8e876bed1cf2599574ce853f7a2a017d19ba0aabd4bcba033a70880"),
+	)
+	bootloaderHash := unhex("3fdf2ff2dcbd31d161a525a88cb57641209c7eac2bc014564a03d34a825144f0")
+	devicePrivateKey := p256PrivKeyFromBytes(
+		unhex("9b1a4d293a6eef1960d8afab5e58dd581b135152ec3399bde9268fa23051321b"),
+	)
+	devicePublicKey := devicePrivateKey.PublicKey
+	devicePubkeyBytes := make([]byte, 64)
+	copy(devicePubkeyBytes[:32], devicePublicKey.X.Bytes())
+	copy(devicePubkeyBytes[32:], devicePublicKey.Y.Bytes())
+	certificate := makeCertificate(rootPrivateKey, bootloaderHash, devicePubkeyBytes)
+
+	undo := addAttestationPubkey(hex.EncodeToString(rootPublicKey.SerializeUncompressed()))
+	defer undo()
+
+	makeAttestation := func(
+		certificate []byte,
+		rootPubkeyIdentifier []byte,
+		challengeSignature []byte,
+	) []byte {
+		var buf bytes.Buffer
+		buf.Write(bootloaderHash)
+		buf.Write(devicePubkeyBytes)
+		buf.Write(certificate)
+		buf.Write(rootPubkeyIdentifier)
+		buf.Write(challengeSignature)
+		return buf.Bytes()
+	}
+	makeChallengeSignature := func(challenge []byte) []byte {
+		sigHash := sha256.Sum256(challenge)
+		sigR, sigS, err := ecdsa.Sign(rand.Reader, devicePrivateKey, sigHash[:])
+		if err != nil {
+			panic(err)
+		}
+		signature := make([]byte, 64)
+		sigR.FillBytes(signature[:32])
+		sigS.FillBytes(signature[32:])
+		return signature
+	}
+
+	err := VerifyAttestation(challenge, nil)
+	require.EqualError(t, err, "attestation must be 256 bytes, got 0")
+
+	err = VerifyAttestation(
+		challenge,
+		makeAttestation(
+			make([]byte, 64),
+			make([]byte, 32),
+			make([]byte, 64),
+		),
+	)
+	require.EqualError(t, err, "could not find root pubkey. identifier=0000000000000000000000000000000000000000000000000000000000000000")
+
+	err = VerifyAttestation(
+		challenge,
+		makeAttestation(
+			make([]byte, 64),
+			rootPubkeyIdentifier,
+			make([]byte, 64),
+		),
+	)
+	require.EqualError(t, err, "could not verify certificate")
+
+	err = VerifyAttestation(
+		challenge,
+		makeAttestation(
+			certificate,
+			rootPubkeyIdentifier,
+			make([]byte, 64),
+		),
+	)
+	require.EqualError(t, err, "could not verify challenge signature")
+
+	err = VerifyAttestation(
+		challenge,
+		makeAttestation(
+			certificate,
+			rootPubkeyIdentifier,
+			makeChallengeSignature(challenge),
+		),
+	)
+	require.NoError(t, err)
+}
+
+func TestGetAttestation(t *testing.T) {
+	challenge := unhex("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")
+	communication := &mocks.Communication{}
+	product := common.ProductBitBox02BTCOnly
+
+	device := NewDevice(
+		semver.NewSemVer(1, 0, 0),
+		&product,
+		&mocks.Config{}, communication, &mocks.Logger{},
+	)
+	attestation, err := device.GetAttestation(challenge)
+	require.EqualError(t, err, "attestation not supported")
+	require.Nil(t, attestation)
+
+	device = NewDevice(
+		semver.NewSemVer(2, 0, 0),
+		&product,
+		&mocks.Config{}, communication, &mocks.Logger{},
+	)
+
+	expectedErr := errors.New("error")
+	communication.MockQuery = func([]byte) ([]byte, error) {
+		return nil, expectedErr
+	}
+	attestation, err = device.GetAttestation(challenge)
+	require.Equal(t, expectedErr, err)
+	require.Nil(t, attestation)
+
+	communication.MockQuery = func([]byte) ([]byte, error) {
+		return nil, nil
+	}
+	attestation, err = device.GetAttestation(challenge)
+	require.EqualError(t, err, "response too short")
+	require.Nil(t, attestation)
+
+	communication.MockQuery = func([]byte) ([]byte, error) {
+		response := make([]byte, 1+attestationPayloadLength)
+		response[0] = 0x01
+		return response, nil
+	}
+	attestation, err = device.GetAttestation(challenge)
+	require.EqualError(t, err, "expected success")
+	require.Nil(t, attestation)
+
+	expectedAttestation := bytes.Repeat([]byte{0x42}, attestationPayloadLength)
+	communication.MockQuery = func([]byte) ([]byte, error) {
+		return append([]byte{0x00}, expectedAttestation...), nil
+	}
+	attestation, err = device.GetAttestation(challenge)
+	require.NoError(t, err)
+	require.Equal(t, expectedAttestation, attestation)
 }
