@@ -215,6 +215,7 @@ func main() {
 		new(big.Int).SetBytes([]byte("\x5a\xf3\x10\x7a\x40\x00")),
 		nil,
 		messages.ETHAddressCase_ETH_ADDRESS_CASE_MIXED,
+		nil,
 	)
 	errpanic(err)
 	fmt.Println(sig)

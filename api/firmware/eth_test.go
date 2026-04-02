@@ -486,6 +486,7 @@ func TestSimulatorETHSignEIP1559(t *testing.T) {
 			value,
 			nil,
 			messages.ETHAddressCase_ETH_ADDRESS_CASE_MIXED,
+			nil,
 		)
 		require.NoError(t, err)
 
