@@ -4,10 +4,13 @@ package firmware
 
 import (
 	"bytes"
+	"encoding/json"
 	"math/big"
 	"testing"
 
+	"github.com/BitBoxSwiss/bitbox02-api-go/api/common"
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/messages"
+	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/mocks"
 	"github.com/BitBoxSwiss/bitbox02-api-go/util/semver"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/sha3"
@@ -283,6 +286,107 @@ func TestEncodeValue(t *testing.T) {
 	require.Equal(t, []byte("\x00\x00\x03\xe8"), encoded)
 }
 
+func TestHandleETHDataStreamingOutOfBounds(t *testing.T) {
+	device := &Device{}
+	_, err := device.nonAtomicHandleETHDataStreaming(
+		[]byte("hello"),
+		&messages.ETHResponse{
+			Response: &messages.ETHResponse_DataRequestChunk{
+				DataRequestChunk: &messages.ETHSignDataRequestChunkResponse{
+					Offset: 4,
+					Length: 2,
+				},
+			},
+		},
+	)
+	require.EqualError(t, err, "unexpected response")
+}
+
+func TestGetValueReturnsType(t *testing.T) {
+	var msg map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(`
+{
+	"types": {
+		"EIP712Domain": [{ "name": "name", "type": "string" }],
+		"Mail": [
+			{ "name": "contents", "type": "string" },
+			{ "name": "payload", "type": "bytes" }
+		]
+	},
+	"primaryType": "Mail",
+	"domain": { "name": "Test" },
+	"message": {
+		"contents": "hello",
+		"payload": "0xaabb"
+	}
+}`), &msg))
+
+	value, dataType, err := getValue(&messages.ETHTypedMessageValueResponse{
+		RootObject: messages.ETHTypedMessageValueResponse_DOMAIN,
+		Path:       []uint32{0},
+	}, msg)
+	require.NoError(t, err)
+	require.Equal(t, []byte("Test"), value)
+	require.Equal(t, messages.ETHSignTypedMessageRequest_STRING, dataType)
+
+	value, dataType, err = getValue(&messages.ETHTypedMessageValueResponse{
+		RootObject: messages.ETHTypedMessageValueResponse_MESSAGE,
+		Path:       []uint32{1},
+	}, msg)
+	require.NoError(t, err)
+	require.Equal(t, []byte{0xaa, 0xbb}, value)
+	require.Equal(t, messages.ETHSignTypedMessageRequest_BYTES, dataType)
+}
+
+func TestETHSignTypedMessageRejectsLargeString(t *testing.T) {
+	communication := &mocks.Communication{}
+	device := newDevice(
+		t,
+		semver.NewSemVer(9, 26, 0),
+		common.ProductBitBox02Multi,
+		communication,
+		func(request *messages.Request) *messages.Response {
+			ethRequest, ok := request.Request.(*messages.Request_Eth)
+			require.True(t, ok)
+
+			switch ethRequest.Eth.Request.(type) {
+			case *messages.ETHRequest_SignTypedMsg:
+				return &messages.Response{
+					Response: &messages.Response_Eth{
+						Eth: &messages.ETHResponse{
+							Response: &messages.ETHResponse_TypedMsgValue{
+								TypedMsgValue: &messages.ETHTypedMessageValueResponse{
+									RootObject: messages.ETHTypedMessageValueResponse_MESSAGE,
+									Path:       []uint32{0},
+								},
+							},
+						},
+					},
+				}
+			default:
+				t.Fatal("unexpected follow-up request")
+				return nil
+			}
+		},
+	)
+
+	_, err := device.ETHSignTypedMessage(
+		1,
+		[]uint32{44 + hardenedKeyStart, 60 + hardenedKeyStart, hardenedKeyStart, 0, 10},
+		[]byte(`{
+			"types": {
+				"EIP712Domain": [{ "name": "name", "type": "string" }],
+				"Msg": [{ "name": "text", "type": "string" }]
+			},
+			"primaryType": "Msg",
+			"domain": { "name": "Test" },
+			"message": { "text": "`+string(bytes.Repeat([]byte("a"), ethStreamingThreshold+1))+`" }
+		}`),
+		false,
+	)
+	require.EqualError(t, err, "string value exceeds maximum size")
+}
+
 func TestSimulatorETHPub(t *testing.T) {
 	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
 		t.Helper()
@@ -456,6 +560,36 @@ func TestSimulatorETHSign(t *testing.T) {
 	})
 }
 
+func TestSimulatorETHSignStreaming(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
+		t.Helper()
+		if !device.Version().AtLeast(semver.NewSemVer(9, 26, 0)) {
+			t.Skip("requires firmware >= 9.26.0")
+		}
+
+		sig, err := device.ETHSign(
+			1,
+			[]uint32{
+				44 + hardenedKeyStart,
+				60 + hardenedKeyStart,
+				0 + hardenedKeyStart,
+				0,
+				10,
+			},
+			8156,
+			new(big.Int).SetUint64(6000000000),
+			21000,
+			[20]byte{0x04, 0xf2, 0x64, 0xcf, 0x34, 0x44, 0x03, 0x13, 0xb4, 0xa0,
+				0x19, 0x2a, 0x35, 0x28, 0x14, 0xfb, 0xe9, 0x27, 0xb8, 0x85},
+			new(big.Int).SetUint64(530564000000000000),
+			bytes.Repeat([]byte{0xab}, 10000),
+			messages.ETHAddressCase_ETH_ADDRESS_CASE_MIXED,
+		)
+		require.NoError(t, err)
+		require.Len(t, sig, 65)
+	})
+}
+
 func TestSimulatorETHSignEIP1559(t *testing.T) {
 	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
 		t.Helper()
@@ -491,5 +625,72 @@ func TestSimulatorETHSignEIP1559(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Len(t, sig, 65, "The signature should have exactly 65 bytes")
+	})
+}
+
+func TestSimulatorETHSignEIP1559Streaming(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
+		t.Helper()
+		if !device.Version().AtLeast(semver.NewSemVer(9, 26, 0)) {
+			t.Skip("requires firmware >= 9.26.0")
+		}
+
+		sig, err := device.ETHSignEIP1559(
+			1,
+			[]uint32{
+				44 + hardenedKeyStart,
+				60 + hardenedKeyStart,
+				0 + hardenedKeyStart,
+				0,
+				10,
+			},
+			8156,
+			new(big.Int),
+			new(big.Int).SetUint64(6000000000),
+			21000,
+			[20]byte{0x04, 0xf2, 0x64, 0xcf, 0x34, 0x44, 0x03, 0x13, 0xb4, 0xa0,
+				0x19, 0x2a, 0x35, 0x28, 0x14, 0xfb, 0xe9, 0x27, 0xb8, 0x85},
+			new(big.Int).SetUint64(530564000000000000),
+			bytes.Repeat([]byte{0xcd}, 10000),
+			messages.ETHAddressCase_ETH_ADDRESS_CASE_MIXED,
+			nil,
+		)
+		require.NoError(t, err)
+		require.Len(t, sig, 65)
+	})
+}
+
+func TestSimulatorETHSignTypedMessageStreamingBytes(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
+		t.Helper()
+
+		sig, err := device.ETHSignTypedMessage(
+			1,
+			[]uint32{
+				44 + hardenedKeyStart,
+				60 + hardenedKeyStart,
+				0 + hardenedKeyStart,
+				0,
+				10,
+			},
+			[]byte(`{
+				"types": {
+					"EIP712Domain": [{ "name": "name", "type": "string" }],
+					"Msg": [{ "name": "data", "type": "bytes" }]
+				},
+				"primaryType": "Msg",
+				"domain": { "name": "Test" },
+				"message": { "data": "0x`+string(bytes.Repeat([]byte("aa"), 10000))+`" }
+			}`),
+			false,
+		)
+
+		if !device.Version().AtLeast(semver.NewSemVer(9, 26, 0)) {
+			require.EqualError(t, err, UnsupportedError("9.26.0").Error())
+			return
+		}
+
+		require.NoError(t, err)
+		require.Len(t, sig, 65)
 	})
 }
