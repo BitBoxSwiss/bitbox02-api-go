@@ -5,6 +5,7 @@ package firmware
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
 
@@ -875,6 +876,12 @@ func TestSimulatorSignBTCTransactionSendSelfSameAccount(t *testing.T) {
 		require.NoError(t, err)
 
 		switch {
+		// Display changed in v9.26.0.
+		case device.Version().AtLeast(semver.NewSemVer(9, 26, 0)):
+			require.Contains(t,
+				stdOut.String(),
+				"This BitBox (same account): bc1p sz0t sdr9 sgnu kfcx 4gtw pp5e xyeq dycf qjvm 2jw6 tvsj 3k3e avts 20yu ag",
+			)
 		// Display changed in v9.22.0.
 		case device.Version().AtLeast(semver.NewSemVer(9, 22, 0)):
 			require.Contains(t,
@@ -968,16 +975,25 @@ func TestSimulatorSignBTCTransactionSendSelfDifferentAccount(t *testing.T) {
 			messages.BTCSignInitRequest_DEFAULT,
 		)
 
-		// Introduced in v9.22.0.
-		if !device.Version().AtLeast(semver.NewSemVer(9, 22, 0)) {
+		switch {
+		// Display changed in v9.26.0.
+		case device.Version().AtLeast(semver.NewSemVer(9, 26, 0)):
+			require.NoError(t, err)
+			require.Contains(t,
+				stdOut.String(),
+				"This BitBox (account #2): bc1p zeyh tmk2 d5jr juna m30d us0p 3409 5m62 2dq7 trm7 r0g8 pwac 2gvq xh8d 47",
+			)
+		case device.Version().AtLeast(semver.NewSemVer(9, 22, 0)):
+			require.NoError(t, err)
+			require.Contains(t,
+				stdOut.String(),
+				"This BitBox (account #2): bc1pzeyhtmk2d5jrjunam30dus0p34095m622dq7trm7r0g8pwac2gvqxh8d47",
+			)
+		default:
+			// Introduced in v9.22.0.
 			require.EqualError(t, err, UnsupportedError("9.22.0").Error())
 			return
 		}
-		require.NoError(t, err)
-		require.Contains(t,
-			stdOut.String(),
-			"This BitBox (account #2): bc1pzeyhtmk2d5jrjunam30dus0p34095m622dq7trm7r0g8pwac2gvqxh8d47",
-		)
 	})
 }
 
@@ -1053,10 +1069,15 @@ func TestSimulatorBTCAddressMultisig(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "bc1qdhqnu2arm9al7uv687amuesk5det5nxx0k9ed30x2u8zjsfnsfyqzlsrsu", address)
 		if device.Version().AtLeast(semver.NewSemVer(9, 20, 0)) {
+			displayAddress := address
+			if device.Version().AtLeast(semver.NewSemVer(9, 26, 0)) {
+				displayAddress = "bc1q dhqn u2ar m9al 7uv6 87am uesk 5det 5nxx 0k9e d30x 2u8z jsfn sfyq zlsr su"
+			}
+
 			// Before simulator v9.20, address confirmation data was not written to stdout.
 			require.Contains(t,
 				stdOut.String(),
-				`TITLE: Register
+				fmt.Sprintf(`TITLE: Register
 BODY: 1-of-3
 Bitcoin multisig
 CONFIRM SCREEN END
@@ -1097,10 +1118,9 @@ BODY: My multisig account
 CONFIRM SCREEN END
 CONFIRM SCREEN START
 TITLE: Receive to
-BODY: bc1qdhqnu2arm9al7uv687amuesk5det5nxx0k9ed30x2u8zjsfnsfyqzlsrsu
+BODY: %s
 CONFIRM SCREEN END
-`,
-			)
+`, displayAddress))
 		}
 	})
 }

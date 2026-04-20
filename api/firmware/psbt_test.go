@@ -835,23 +835,26 @@ func TestSimulatorBTCPSBTSilentPayment(t *testing.T) {
 func TestSimulatorBTCPSBTSendSelfSameAccount(t *testing.T) {
 	type Test struct {
 		sendSelfPath []uint32
+		// expected from v9.26
+		expected926 string
 		// expected from v9.22
-		expectedNew string
+		expected922 string
 		// expected until v9.22
 		expectedOld string
 	}
-
 	tests := []Test{
 		{
 			// Same account
 			sendSelfPath: []uint32{84 + HARDENED, 1 + HARDENED, 0 + HARDENED, 0, 0},
-			expectedNew:  "This BitBox (same account): tb1ql34ny8mcpgjqr0ngsnjmlpzjpgncyz2ygh2gye",
+			expected926:  "This BitBox (same account): tb1q l34n y8mc pgjq r0ng snjm lpzj pgnc yz2y gh2g ye",
+			expected922:  "This BitBox (same account): tb1ql34ny8mcpgjqr0ngsnjmlpzjpgncyz2ygh2gye",
 			expectedOld:  "This BitBox02: tb1ql34ny8mcpgjqr0ngsnjmlpzjpgncyz2ygh2gye",
 		},
 		{
 			// Different account
 			sendSelfPath: []uint32{84 + HARDENED, 1 + HARDENED, 1 + HARDENED, 0, 0},
-			expectedNew:  "This BitBox (account #2): tb1qvrcm2akp30d7ecnqdjk8qdu09962ak005rcp6j",
+			expected926:  "This BitBox (account #2): tb1q vrcm 2akp 30d7 ecnq djk8 qdu0 9962 ak00 5rcp 6j",
+			expected922:  "This BitBox (account #2): tb1qvrcm2akp30d7ecnqdjk8qdu09962ak005rcp6j",
 			expectedOld:  "tb1qvrcm2akp30d7ecnqdjk8qdu09962ak005rcp6j",
 		},
 	}
@@ -860,7 +863,6 @@ func TestSimulatorBTCPSBTSendSelfSameAccount(t *testing.T) {
 		t.Run("", func(t *testing.T) {
 			testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *bytes.Buffer) {
 				t.Helper()
-
 				fingerprint, err := device.RootFingerprint()
 				require.NoError(t, err)
 
@@ -953,12 +955,16 @@ func TestSimulatorBTCPSBTSendSelfSameAccount(t *testing.T) {
 				require.NoError(t, psbt.MaybeFinalizeAll(psbt_))
 				require.NoError(t, txValidityCheck(psbt_))
 
-				// v9.22 changed the format of the output string.
-				if device.Version().AtLeast(semver.NewSemVer(9, 22, 0)) {
-					require.Contains(t, stdOut.String(), "ADDRESS: "+test.expectedNew)
-				} else if device.Version().AtLeast(semver.NewSemVer(9, 20, 0)) {
-					// Before simulator v9.20, address confirmation data was not written to stdout.
+				// v9.22/v9.26 changed the format of the output string.
+				switch {
+				case device.Version().AtLeast(semver.NewSemVer(9, 26, 0)):
+					require.Contains(t, stdOut.String(), "ADDRESS: "+test.expected926)
+				case device.Version().AtLeast(semver.NewSemVer(9, 22, 0)):
+					require.Contains(t, stdOut.String(), "ADDRESS: "+test.expected922)
+				case device.Version().AtLeast(semver.NewSemVer(9, 20, 0)):
 					require.Contains(t, stdOut.String(), "ADDRESS: "+test.expectedOld)
+				default:
+					// Before simulator v9.20, address confirmation data was not written to stdout.
 				}
 
 				// Change address is not confirmed

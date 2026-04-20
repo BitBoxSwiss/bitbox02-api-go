@@ -39,10 +39,14 @@ func TestSimulatorBackups(t *testing.T) {
 		require.Equal(t, list[0].ID, id)
 
 		require.Error(t, device.RestoreBackup(list[0].ID))
-		require.NoError(t, device.Reset())
-		require.NoError(t, device.RestoreBackup(list[0].ID))
-		id, err = device.CheckBackup(true)
-		require.NoError(t, err)
-		require.Equal(t, list[0].ID, id)
+
+		// v9.26.1 C simulator has a regression where the reset call loops forever.
+		if device.Version().String() != "9.26.1" {
+			require.NoError(t, device.Reset())
+			require.NoError(t, device.RestoreBackup(list[0].ID))
+			id, err = device.CheckBackup(true)
+			require.NoError(t, err)
+			require.Equal(t, list[0].ID, id)
+		}
 	})
 }
