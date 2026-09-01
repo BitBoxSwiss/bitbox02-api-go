@@ -12,7 +12,7 @@ require (
 	github.com/btcsuite/btcd/chainhash/v2 v2.0.0
 	github.com/btcsuite/btcd/psbt/v2 v2.0.0
 	github.com/btcsuite/btcd/txscript/v2 v2.0.0
-	github.com/btcsuite/btcd/wire/v2 v2.0.0
+	github.com/btcsuite/btcd/wire/v2 v2.0.1
 	github.com/flynn/noise v1.1.0
 	github.com/karalabe/hid v1.0.1-0.20240306101548-573246063e52
 	github.com/pkg/errors v0.9.1
