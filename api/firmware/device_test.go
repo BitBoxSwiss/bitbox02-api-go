@@ -209,6 +209,9 @@ func runSimulator(filename string) (func() error, *Device, *simulatorStdout, err
 	)
 	return func() error {
 		connErr := conn.Close()
+		if errors.Is(connErr, net.ErrClosed) {
+			connErr = nil
+		}
 		killErr := cmd.Process.Kill()
 		<-scannerDone
 		_ = cmd.Wait()
@@ -374,6 +377,67 @@ func testInitializedSimulators(t *testing.T, run func(*testing.T, *Device, *simu
 		t.Helper()
 		require.NoError(t, device.RestoreFromMnemonic())
 		run(t, device, stdOut)
+	})
+}
+
+// Records real simulator responses without replacing the transport or firmware behavior.
+type recordingCommunication struct {
+	Communication
+
+	attestationResponse []byte
+}
+
+func (communication *recordingCommunication) Query(request []byte) ([]byte, error) {
+	response, err := communication.Communication.Query(request)
+	if bytes.HasPrefix(request, []byte(hwwReqNew+opAttestation)) {
+		communication.attestationResponse = response
+	}
+	return response, err
+}
+
+func TestSimulatorReconnect(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *simulatorStdout) {
+		t.Helper()
+		if device.version.AtLeast(semver.NewSemVer(9, 28, 0)) {
+			// Leave the signing workflow waiting for its next request when the host disconnects.
+			response, err := device.query(&messages.Request{
+				Request: &messages.Request_BtcSignInit{
+					BtcSignInit: &messages.BTCSignInitRequest{
+						Coin: messages.BTCCoin_BTC,
+						ScriptConfigs: []*messages.BTCScriptConfigWithKeypath{{
+							ScriptConfig: NewBTCScriptConfigSimple(messages.BTCScriptConfig_P2WPKH),
+							Keypath:      []uint32{84 + 0x80000000, 0x80000000, 0x80000000},
+						}},
+						Version:    2,
+						NumInputs:  1,
+						NumOutputs: 1,
+					},
+				},
+			})
+			require.NoError(t, err)
+			next, ok := response.Response.(*messages.Response_BtcSignNext)
+			require.True(t, ok)
+			require.Equal(t, messages.BTCSignNextResponse_INPUT, next.BtcSignNext.Type)
+		}
+		device.Close()
+
+		// Reconnect to the same running simulator, preserving the firmware session state.
+		conn, err := net.DialTimeout("tcp", "localhost:15423", time.Second)
+		require.NoError(t, err)
+		require.NoError(t, conn.SetDeadline(time.Now().Add(15*time.Second)))
+		communication := &recordingCommunication{
+			Communication: u2fhid.NewCommunication(conn, 0xc1),
+		}
+		reconnected := NewDevice(nil, nil, device.config, communication, device.log)
+		defer reconnected.Close()
+		require.NoError(t, reconnected.Init())
+		// The simulator has no attestation certificate, so attestation returns FAILURE.
+		// An unfinished workflow would instead return its encrypted error, which Init ignores.
+		require.Equal(t, []byte{0x00, 0x01}, communication.attestationResponse)
+		reconnected.ChannelHashVerify(true)
+		fp, err := reconnected.RootFingerprint()
+		require.NoError(t, err)
+		require.Equal(t, "4c00739d", hex.EncodeToString(fp))
 	})
 }
 

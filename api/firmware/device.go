@@ -276,6 +276,10 @@ func (device *Device) Init() error {
 		return nil
 	}
 
+	if err := device.resetSession(); err != nil {
+		return err
+	}
+
 	attestation, err := device.performAttestation()
 	if err != nil {
 		return err
