@@ -8,6 +8,7 @@ import (
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/firmware/messages"
 	"github.com/BitBoxSwiss/bitbox02-api-go/util/errp"
 	"github.com/BitBoxSwiss/bitbox02-api-go/util/semver"
+	"github.com/BitBoxSwiss/bitbox02-api-go/util/sleep"
 )
 
 func (device *Device) supportsPairedUnlock() bool {
@@ -18,6 +19,10 @@ func (device *Device) supportsPairedUnlock() bool {
 // the current phase's channel, so a delayed click cannot affect a later phase or unlock.
 func (device *Device) unlock() error {
 	return device.atomicQueries(func() (err error) {
+		// Passphrase entry spans multiple queries, including time spent waiting for host input.
+		sleep.Prevent()
+		defer sleep.Allow()
+
 		config := device.options.passphrase
 		var hostEntry chan struct{}
 		withdraw := func() {
