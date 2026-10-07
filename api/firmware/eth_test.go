@@ -4,6 +4,7 @@ package firmware
 
 import (
 	"bytes"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -300,7 +301,7 @@ func TestEncodeValue(t *testing.T) {
 
 	encoded, err = encodeValue(parseTypeNoErr(t, "int64", nil), float64(2983742332))
 	require.NoError(t, err)
-	require.Equal(t, []byte("\xb1\xd8\x4b\x7c"), encoded)
+	require.Equal(t, []byte("\x00\xb1\xd8\x4b\x7c"), encoded)
 
 	encoded, err = encodeValue(parseTypeNoErr(t, "int64", nil), float64(-2983742332))
 	require.NoError(t, err)
@@ -341,6 +342,49 @@ func TestEncodeValue(t *testing.T) {
 	} {
 		_, err := encodeValue(parseTypeNoErr(t, test.typ, nil), test.value)
 		require.Error(t, err, test.typ)
+	}
+}
+
+func TestEncodeValueSignedIntegers(t *testing.T) {
+	for _, test := range []struct {
+		value int64
+		hex   string
+	}{
+		{0, "00"}, {1, "01"}, {-1, "ff"},
+		{127, "7f"}, {128, "0080"}, {129, "0081"},
+		{-127, "81"}, {-128, "80"}, {-129, "ff7f"},
+		{255, "00ff"}, {256, "0100"}, {-255, "ff01"}, {-256, "ff00"},
+		{32767, "7fff"}, {32768, "008000"},
+		{-32768, "8000"}, {-32769, "ff7fff"},
+		{65535, "00ffff"}, {65536, "010000"},
+	} {
+		decimal := big.NewInt(test.value).String()
+		t.Run(decimal, func(t *testing.T) {
+			for _, input := range []interface{}{decimal, float64(test.value)} {
+				encoded, err := encodeValue(parseTypeNoErr(t, "int64", nil), input)
+				require.NoError(t, err)
+				require.Equal(t, test.hex, fmt.Sprintf("%x", encoded))
+			}
+		})
+	}
+}
+
+func TestBigendianIntSignedWidths(t *testing.T) {
+	for size := 1; size <= 32; size++ {
+		limit := new(big.Int).Lsh(big.NewInt(1), uint(8*size-1))
+		maximum := new(big.Int).Sub(limit, big.NewInt(1))
+		minimum := new(big.Int).Neg(limit)
+		for _, value := range []*big.Int{minimum, maximum} {
+			original := new(big.Int).Set(value)
+			encoded := bigendianInt(value)
+			require.Len(t, encoded, size)
+			decoded := new(big.Int).SetBytes(encoded)
+			if encoded[0]&0x80 != 0 {
+				decoded.Sub(decoded, new(big.Int).Lsh(big.NewInt(1), uint(8*size)))
+			}
+			require.Zero(t, decoded.Cmp(value))
+			require.Zero(t, original.Cmp(value), "encoding must not mutate its input")
+		}
 	}
 }
 
@@ -556,6 +600,44 @@ func TestSimulatorETHSignTypedMessage(t *testing.T) {
 		)
 		require.NoError(t, err)
 		require.Len(t, sig, 65)
+	})
+}
+
+func TestSimulatorETHSignTypedMessageSignedIntegers(t *testing.T) {
+	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *simulatorStdout) {
+		t.Helper()
+		keypath := []uint32{44 + hardenedKeyStart, 60 + hardenedKeyStart, hardenedKeyStart, 0, 10}
+		pubKey := simulatorPub(t, device, keypath...)
+		sig, err := device.ETHSignTypedMessage(1, keypath, []byte(`{
+			"types": {
+				"EIP712Domain": [{"name": "name", "type": "string"}],
+				"SignedIntegers": [
+					{"name": "positive", "type": "int16"},
+					{"name": "negative", "type": "int8"},
+					{"name": "zero", "type": "int8"}
+				]
+			},
+			"primaryType": "SignedIntegers",
+			"domain": {"name": "Signed integers"},
+			"message": {"positive": 128, "negative": -128, "zero": 0}
+		}`), true)
+		require.NoError(t, err)
+		require.Len(t, sig, 65)
+
+		// Compute the EIP-712 digest independently of the wire encoder. The device
+		// must sign +128, -128 and zero, not reinterpret or reject their sign bytes.
+		domainHash := hashKeccak(bytes.Join([][]byte{
+			hashKeccak([]byte("EIP712Domain(string name)")),
+			hashKeccak([]byte("Signed integers")),
+		}, nil))
+		messageHash := hashKeccak(bytes.Join([][]byte{
+			hashKeccak([]byte("SignedIntegers(int16 positive,int8 negative,int8 zero)")),
+			append(make([]byte, 31), 0x80),
+			append(bytes.Repeat([]byte{0xff}, 31), 0x80),
+			make([]byte, 32),
+		}, nil))
+		digest := hashKeccak(bytes.Join([][]byte{{0x19, 0x01}, domainHash, messageHash}, nil))
+		require.True(t, parseECDSASignature(t, sig[:64]).Verify(digest, pubKey))
 	})
 }
 
