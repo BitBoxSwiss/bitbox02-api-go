@@ -157,6 +157,8 @@ func (device *Device) nonAtomicQuery(request proto.Message) (*messages.Response,
 		return nil, errp.WithStack(err)
 	}
 
+	defer clear(requestBytes)
+
 	requestBytesEncrypted, err := device.sendCipher.Encrypt(nil, nil, requestBytes)
 	if err != nil {
 		return nil, errp.WithStack(err)

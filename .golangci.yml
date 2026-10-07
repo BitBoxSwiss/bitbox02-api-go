@@ -81,6 +81,7 @@ linters:
     rules:
       - linters:
           - errcheck
+          - goconst
           - gocyclo
           - godot
           - gosec
