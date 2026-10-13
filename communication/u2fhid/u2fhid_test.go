@@ -108,6 +108,12 @@ func TestSendFrame(t *testing.T) {
 			chunkSize:      1,
 			expectedFrames: strings.Repeat("d", 64*3),
 		},
+		{
+			name:           "maximum payload",
+			input:          strings.Repeat("e", 7609),
+			chunkSize:      64,
+			expectedFrames: strings.Repeat("e", 7609),
+		},
 	}
 
 	for _, tt := range tests {
@@ -173,6 +179,27 @@ func TestSendFrame(t *testing.T) {
 						}
 					}
 				}
+			}
+		})
+	}
+}
+
+func TestSendFrameRejectsOversizedMessages(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		size int
+	}{
+		{name: "one byte over maximum", size: 7610},
+		{name: "length exceeds uint16", size: 1 << 16},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			rw := &testRW{}
+			comm := NewCommunication(rw, 0xab)
+			if err := comm.SendFrame(strings.Repeat("a", tt.size)); err == nil {
+				t.Error("expected oversized message to be rejected")
+			}
+			if rw.writeBuffer.Len() != 0 {
+				t.Error("oversized message wrote packets to the device")
 			}
 		})
 	}
