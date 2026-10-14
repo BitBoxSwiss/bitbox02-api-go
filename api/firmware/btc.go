@@ -346,7 +346,7 @@ type BTCTx struct {
 type BTCSignResult struct {
 	// Signatures contains the input signatures. One 64 byte signature per input.
 	Signatures [][]byte
-	// GeneratedOutputs contains the outputs generated (silent payments). The map key is the input
+	// GeneratedOutputs contains the outputs generated (silent payments). The map key is the output
 	// index, the map value is the generated pkScript.
 	GeneratedOutputs map[int][]byte
 }
@@ -523,15 +523,18 @@ func (device *Device) nonAtomicBTCSign(
 			}
 		case messages.BTCSignNextResponse_OUTPUT:
 			outputIndex := next.Index
+			output := tx.Outputs[outputIndex]
 			next, err = device.nonAtomicQueryBtcSign(&messages.Request{
 				Request: &messages.Request_BtcSignOutput{
-					BtcSignOutput: tx.Outputs[outputIndex],
+					BtcSignOutput: output,
 				}})
 			if err != nil {
 				return nil, err
 			}
-			if next.GeneratedOutputPkscript != nil {
-				generatedOutputs[int(outputIndex)] = next.GeneratedOutputPkscript
+			if output.SilentPayment != nil {
+				if len(next.GeneratedOutputPkscript) == 0 {
+					return nil, errp.New("missing generated silent payment output")
+				}
 				err := silentPaymentOutputVerify(
 					tx,
 					int(outputIndex),
@@ -541,6 +544,9 @@ func (device *Device) nonAtomicBTCSign(
 				if err != nil {
 					return nil, err
 				}
+				generatedOutputs[int(outputIndex)] = next.GeneratedOutputPkscript
+			} else if len(next.GeneratedOutputPkscript) != 0 || len(next.SilentPaymentDleqProof) != 0 {
+				return nil, errp.New("unexpected silent payment output data")
 			}
 		case messages.BTCSignNextResponse_PAYMENT_REQUEST:
 			paymentRequestIndex := next.Index
@@ -559,6 +565,15 @@ func (device *Device) nonAtomicBTCSign(
 				return nil, err
 			}
 		case messages.BTCSignNextResponse_DONE:
+			// The device may skip output requests entirely, so check completeness against the
+			// transaction's requested silent payments before returning any signing result.
+			for i, output := range tx.Outputs {
+				if output.SilentPayment != nil {
+					if _, ok := generatedOutputs[i]; !ok {
+						return nil, errp.New("missing verified silent payment output")
+					}
+				}
+			}
 			return &BTCSignResult{
 				Signatures:       signatures,
 				GeneratedOutputs: generatedOutputs,
