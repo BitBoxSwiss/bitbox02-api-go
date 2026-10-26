@@ -11,6 +11,37 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestSimulatorDeviceLanguage(t *testing.T) {
+	testSimulatorsAfterPairing(t, func(t *testing.T, device *Device, stdOut *simulatorStdout) {
+		t.Helper()
+		info, err := device.DeviceInfo()
+		require.NoError(t, err)
+		if len(info.SupportedLanguages) == 0 {
+			require.Empty(t, info.Language)
+			t.Skip("simulator does not support device languages")
+		}
+		require.Equal(t, "en", info.Language)
+		require.Contains(t, info.SupportedLanguages, "en")
+		require.Contains(t, info.SupportedLanguages, "de")
+		supportedLanguages := info.SupportedLanguages
+
+		for _, language := range []string{"de", "en"} {
+			require.NoError(t, device.SetDeviceLanguage(language))
+			info, err = device.DeviceInfo()
+			require.NoError(t, err)
+			require.Equal(t, language, info.Language)
+			require.Equal(t, supportedLanguages, info.SupportedLanguages)
+
+			err = device.SetDeviceLanguage("invalid")
+			require.True(t, isErrorCode(err, ErrInvalidInput), "unexpected error: %v", err)
+			info, err = device.DeviceInfo()
+			require.NoError(t, err)
+			require.Equal(t, language, info.Language)
+			require.Equal(t, supportedLanguages, info.SupportedLanguages)
+		}
+	})
+}
+
 func TestSimulatorDeviceName(t *testing.T) {
 	testSimulatorsAfterPairing(t, func(t *testing.T, device *Device, stdOut *simulatorStdout) {
 		t.Helper()
