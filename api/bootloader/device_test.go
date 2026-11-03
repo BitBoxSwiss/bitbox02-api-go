@@ -4,6 +4,7 @@ package bootloader_test
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -340,4 +341,48 @@ func TestErased(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, erased)
 	})
+}
+
+// Erasure detection must follow the bootloader's hash format, including at an unchanged counter.
+func TestErasedHashSchemes(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		bootloader *semver.SemVer
+		version    uint32
+		hash       string
+		erased     bool
+	}{
+		{"legacy", semver.NewSemVer(1, 1, 0), 50, "83c01caef5a608515db49956bf4e242dda659ec0cbc02db00ed3666d5140d967", true},
+		{"first-stage1-upgrade", semver.NewSemVer(1, 2, 2), 50, "b727bfc6d1720c5227be70d1b432eccebd60ca45c6c29fb8bc21fe8c093be176", true},
+		{"before-v3-upgrade", semver.NewSemVer(1, 2, 2), 56, "c7697f353131e3da90d79c008005e77cc782201b714f6d3beb4b98f5565cc498", true},
+		{"after-v3-upgrade", semver.NewSemVer(1, 2, 3), 56, "3c25660067365be6b5320d3854717b40ae37f8d7f1a9646cf6d25f5c053ee238", true},
+		{"latest", semver.NewSemVer(1, 2, 3), 57, "befca4bc0cbb85be9ae7249d5484654dbba2d76c9f447207e88c78a726fdc754", true},
+		{"old-hash-on-new-bootloader", semver.NewSemVer(1, 2, 3), 56, "c7697f353131e3da90d79c008005e77cc782201b714f6d3beb4b98f5565cc498", false},
+		{"new-hash-on-old-bootloader", semver.NewSemVer(1, 2, 2), 56, "3c25660067365be6b5320d3854717b40ae37f8d7f1a9646cf6d25f5c053ee238", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			hash, err := hex.DecodeString(test.hash)
+			require.NoError(t, err)
+			communication := communicationMock{
+				query: func(msg []byte) ([]byte, error) {
+					switch msg[0] {
+					case 'v':
+						response := binary.LittleEndian.AppendUint32([]byte{'v', 0}, test.version)
+						return binary.LittleEndian.AppendUint32(response, 4), nil
+					case 'h':
+						response := make([]byte, 66)
+						response[0] = 'h'
+						copy(response[2:34], hash)
+						return response, nil
+					default:
+						return nil, errors.New("unexpected query")
+					}
+				},
+			}
+			device := bootloader.NewDevice(test.bootloader, common.ProductBitBox02Multi, &communication, nil)
+			erased, err := device.Erased()
+			require.NoError(t, err)
+			require.Equal(t, test.erased, erased)
+		})
+	}
 }
