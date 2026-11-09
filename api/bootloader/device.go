@@ -64,6 +64,7 @@ type Device struct {
 	communication   Communication
 	version         *semver.SemVer
 	product         common.Product
+	development     bool
 	status          *Status
 	onStatusChanged func(*Status)
 }
@@ -74,14 +75,32 @@ func NewDevice(
 	product common.Product,
 	communication Communication,
 	onStatusChanged func(*Status),
+	options ...DeviceOption,
 ) *Device {
-	return &Device{
+	device := &Device{
 		communication:   communication,
 		version:         version,
 		product:         product,
 		status:          &Status{},
 		onStatusChanged: onStatusChanged,
 	}
+	for _, option := range options {
+		option(device)
+	}
+	return device
+}
+
+// DeviceOption configures a bootloader device.
+type DeviceOption func(*Device)
+
+// WithDevelopment records whether this is a development bootloader.
+func WithDevelopment(development bool) DeviceOption {
+	return func(device *Device) { device.development = development }
+}
+
+// IsDevelopment reports whether this is a development bootloader.
+func (device *Device) IsDevelopment() bool {
+	return device.development
 }
 
 // Product returns the bootloader product.
@@ -116,18 +135,38 @@ func (device *Device) query(cmd rune, data []byte) ([]byte, error) {
 	return reply[2:], nil
 }
 
-// Versions queries the device for the firmware and signing pubkeys version.
-func (device *Device) Versions() (uint32, uint32, error) {
+// VersionInfo contains the installed firmware, signing key and stage0 versions.
+type VersionInfo struct {
+	FirmwareVersion       uint32
+	SigningPubkeysVersion uint32
+	// Stage0Version is nil when the bootloader does not report a known stage0 version.
+	Stage0Version *uint16
+}
+
+// Versions queries version information, including stage0 starting with bootloader v1.2.4.
+func (device *Device) Versions() (*VersionInfo, error) {
 	response, err := device.query('v', nil)
 	if err != nil {
-		return 0, 0, err
+		return nil, err
 	}
-	if len(response) < 8 {
-		return 0, 0, errp.Newf("Unexpected reply: %v", response)
+	reader := bytes.NewReader(response)
+	info := &VersionInfo{}
+	if err := binary.Read(reader, binary.LittleEndian, &info.FirmwareVersion); err != nil {
+		return nil, errp.WithMessage(err, "invalid firmware version")
 	}
-	firmwareVersion := binary.LittleEndian.Uint32(response[:4])
-	signingPubkeysVersion := binary.LittleEndian.Uint32(response[4:8])
-	return firmwareVersion, signingPubkeysVersion, nil
+	if err := binary.Read(reader, binary.LittleEndian, &info.SigningPubkeysVersion); err != nil {
+		return nil, errp.WithMessage(err, "invalid signing pubkeys version")
+	}
+	if reader.Len() > 0 {
+		var stage0Version uint16
+		if err := binary.Read(reader, binary.LittleEndian, &stage0Version); err != nil {
+			return nil, errp.WithMessage(err, "invalid stage0 version")
+		}
+		if stage0Version != 0 {
+			info.Stage0Version = &stage0Version
+		}
+	}
+	return info, nil
 }
 
 // GetHashes queries the device for the firmware and signing keydata hashes.
@@ -239,6 +278,9 @@ func (device *Device) writeChunk(chunkNum uint8, chunk []byte) error {
 }
 
 func (device *Device) flashUnsignedFirmware(firmware []byte, progressCallback func(float64)) error {
+	if len(firmware) == 0 {
+		return errp.New("firmware is empty")
+	}
 	if len(firmware) > firmwareChunks*chunkSize {
 		return errp.New("firmware too big")
 	}
@@ -309,16 +351,34 @@ func (device *Device) flashSignedFirmware(firmware []byte, progressCallback func
 
 // UpgradeFirmware uploads a signed bitbox02 firmware release to the device.
 func (device *Device) UpgradeFirmware(firmware []byte) error {
+	return device.upgradeFirmware(func(onProgress func(float64)) error {
+		return device.flashSignedFirmware(firmware, onProgress)
+	})
+}
+
+// UpgradeUnsignedFirmware uploads unsigned firmware to a development device without changing
+// its firmware counter or signing data, then reboots it.
+func (device *Device) UpgradeUnsignedFirmware(firmware []byte) error {
+	if !device.IsDevelopment() {
+		return errp.New("unsigned firmware requires a development bootloader")
+	}
+	return device.upgradeFirmware(func(onProgress func(float64)) error {
+		return device.flashUnsignedFirmware(firmware, onProgress)
+	})
+}
+
+func (device *Device) upgradeFirmware(flash func(func(float64)) error) error {
 	if device.status.Upgrading {
 		return errp.New("already in progress")
 	}
+	*device.status = Status{}
 	device.onStatusChanged(device.status)
 	onProgress := func(progress float64) {
 		device.status.Upgrading = true
 		device.status.Progress = progress
 		device.onStatusChanged(device.status)
 	}
-	err := device.flashSignedFirmware(firmware, onProgress)
+	err := flash(onProgress)
 	if err != nil {
 		device.status.Upgrading = false
 		device.status.ErrMsg = err.Error()
@@ -336,7 +396,13 @@ func (device *Device) Erased() (bool, error) {
 	// We check by comparing the device reported firmware hash. If erased, the firmware is all
 	// '\xFF'.
 
-	firmwareVersion, _, err := device.Versions()
+	return device.ContainsFirmware(nil)
+}
+
+// ContainsFirmware compares the installed firmware with an unsigned image, including erased
+// padding. It uses the connected bootloader's hash format and stored firmware counter.
+func (device *Device) ContainsFirmware(firmware []byte) (bool, error) {
+	versions, err := device.Versions()
 	if err != nil {
 		return false, err
 	}
@@ -348,7 +414,7 @@ func (device *Device) Erased() (bool, error) {
 	} else if device.version.AtLeast(semver.NewSemVer(1, 2, 0)) {
 		scheme = firmwareHashProduct
 	}
-	emptyFirmwareHash, err := hashFirmware(device.product, firmwareVersion, nil, scheme)
+	expectedFirmwareHash, err := hashFirmware(device.product, versions.FirmwareVersion, firmware, scheme)
 	if err != nil {
 		return false, err
 	}
@@ -357,5 +423,5 @@ func (device *Device) Erased() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return bytes.Equal(firmwareHash, emptyFirmwareHash), nil
+	return bytes.Equal(firmwareHash, expectedFirmwareHash), nil
 }
