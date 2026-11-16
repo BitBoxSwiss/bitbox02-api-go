@@ -44,6 +44,40 @@ func TestNewXPub(t *testing.T) {
 	}, xpub)
 }
 
+func TestComputePaymentRequestSighashRefund(t *testing.T) {
+	refund := &messages.BTCPaymentRequestRequest_Memo_RefundMemo{
+		Address: "bc1qaff6ey7a8nztdl8ufluu5eagpwy6sntmaf53pf",
+	}
+	request := &messages.BTCPaymentRequestRequest{
+		RecipientName: "Test Swap",
+		TotalAmount:   100000,
+		Memos: []*messages.BTCPaymentRequestRequest_Memo{
+			{Memo: &messages.BTCPaymentRequestRequest_Memo_CoinPurchaseMemo_{
+				CoinPurchaseMemo: &messages.BTCPaymentRequestRequest_Memo_CoinPurchaseMemo{
+					CoinType: 60,
+					Amount:   "0.25 ETH",
+					Address:  "0x773A77b9D32589be03f9132AF759e294f7851be9",
+				},
+			}},
+			{Memo: &messages.BTCPaymentRequestRequest_Memo_RefundMemo_{RefundMemo: refund}},
+		},
+	}
+	const outputAddress = "bc1qkkweqa5vk942jgevs0x0h8hsmqgfr08n6l7tu9"
+	sighash, err := ComputePaymentRequestSighash(request, 0, 100000, outputAddress)
+	require.NoError(t, err)
+	// Matches the first assertion in the firmware unit test
+	// hww::api::payment_request::tests::test_sighash_refund.
+	require.Equal(t,
+		unhex("eda7a0a2a0f1e24227e58add144371008744d6fbc14aca0a415f0b1281e10863"),
+		sighash,
+	)
+
+	refund.Address = outputAddress
+	changedSighash, err := ComputePaymentRequestSighash(request, 0, 100000, outputAddress)
+	require.NoError(t, err)
+	require.NotEqual(t, sighash, changedSighash)
+}
+
 func TestSimulatorBTCXpub(t *testing.T) {
 	testInitializedSimulators(t, func(t *testing.T, device *Device, stdOut *simulatorStdout) {
 		t.Helper()
