@@ -658,11 +658,19 @@ func changedBTCVectorPSBTOutputs(before [][]byte, packet *psbt.Packet) map[int]s
 func assertBTCVectorSignOutcome(
 	t *testing.T,
 	err error,
+	vectorID string,
 	expectation *btcTestVectorVersionExpectation,
 ) bool {
 	t.Helper()
 	switch expectation.Outcome {
 	case btcTestVectorOutcomeSuccess:
+		if vectorID == "silent-payment-owned-output" {
+			// The shared vectors describe firmware behavior. Older firmware accepts silent
+			// payment metadata on owned outputs without returning a generated script, but
+			// the Go client requires a verified script for every requested silent payment.
+			require.EqualError(t, err, "missing generated silent payment output")
+			return false
+		}
 		require.NoError(t, err)
 		return true
 	case btcTestVectorOutcomeUnsupported:
@@ -748,13 +756,15 @@ func runBTCPSBTTestVector(
 	err = device.BTCSignPSBT(coin, packet, options)
 	afterSignatures, signaturesErr := btcTestVectorObservedSignatureSlots(packet)
 	require.NoError(t, signaturesErr)
-	if !assertBTCVectorSignOutcome(t, err, expectation) {
+	if !assertBTCVectorSignOutcome(t, err, vector.ID, expectation) {
 		require.ElementsMatch(
 			t,
 			beforeSignatures,
 			afterSignatures,
 			"failed signing changed PSBT signatures",
 		)
+		require.Empty(t, changedBTCVectorPSBTOutputs(outputScriptsBefore, packet),
+			"failed signing changed PSBT outputs")
 		return
 	}
 
