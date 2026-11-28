@@ -6,13 +6,11 @@ package main
 import (
 	"fmt"
 	"log"
-	"regexp"
 
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/bootloader"
 	"github.com/BitBoxSwiss/bitbox02-api-go/api/common"
 	"github.com/BitBoxSwiss/bitbox02-api-go/communication/u2fhid"
 	"github.com/BitBoxSwiss/bitbox02-api-go/communication/u2fhid/hiddevice"
-	"github.com/BitBoxSwiss/bitbox02-api-go/util/errp"
 	"github.com/BitBoxSwiss/bitbox02-api-go/util/semver"
 	"github.com/karalabe/hid"
 )
@@ -40,18 +38,6 @@ func isBitBox02Bootloader(deviceInfo *hid.DeviceInfo) bool {
 		(deviceInfo.UsagePage == 0xffff || deviceInfo.Interface == 0)
 }
 
-func parseVersion(serial string) (*semver.SemVer, error) {
-	match := regexp.MustCompile(`v([0-9]+\.[0-9]+\.[0-9]+)`).FindStringSubmatch(serial)
-	if len(match) != 2 {
-		return nil, errp.Newf("Could not find the version in '%s'.", serial)
-	}
-	version, err := semver.NewSemVerFromString(match[1])
-	if err != nil {
-		return nil, err
-	}
-	return version, err
-}
-
 func main() {
 	deviceInfo := func() *hid.DeviceInfo {
 		infos, err := hid.Enumerate(0, 0)
@@ -73,15 +59,16 @@ func main() {
 	errpanic(err)
 	const bitbox02BootloaderCMD = 0x80 + 0x40 + 0x03
 	comm := u2fhid.NewCommunication(hiddevice.New(hidDevice), bitbox02BootloaderCMD)
-	version, err := parseVersion(deviceInfo.Serial)
+	version, development, err := semver.ParseDeviceVersion(deviceInfo.Serial)
 	errpanic(err)
 	product, err := common.ProductFromDeviceProductString(deviceInfo.Product)
 	errpanic(err)
-	device := bootloader.NewDevice(version, product, comm, func(*bootloader.Status) {})
-	firmwareVersion, signingPubkeysVersion, err := device.Versions()
+	device := bootloader.NewDevice(version, product, comm, func(*bootloader.Status) {},
+		bootloader.WithDevelopment(development))
+	versions, err := device.Versions()
 	errpanic(err)
-	fmt.Println("Firmware monotonic version:", firmwareVersion)
-	fmt.Println("Signing pubkeys monotonic version:", signingPubkeysVersion)
+	fmt.Println("Firmware monotonic version:", versions.FirmwareVersion)
+	fmt.Println("Signing pubkeys monotonic version:", versions.SigningPubkeysVersion)
 	fmt.Println("Product:", device.Product())
 	hardware, err := device.Hardware()
 	errpanic(err)

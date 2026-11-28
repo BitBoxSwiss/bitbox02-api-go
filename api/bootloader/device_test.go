@@ -96,10 +96,11 @@ func TestVersions(t *testing.T) {
 				signingPubkeysVersion := "\xe6\x1d\x00\x00"
 				return []byte("v\x00" + firmwareVersion + signingPubkeysVersion), nil
 			}
-			firmwareVersion, signingPubkeysVersion, err := env.device.Versions()
+			versions, err := env.device.Versions()
 			require.NoError(t, err)
-			require.Equal(t, uint32(323213), firmwareVersion)
-			require.Equal(t, uint32(7654), signingPubkeysVersion)
+			require.Equal(t, uint32(323213), versions.FirmwareVersion)
+			require.Equal(t, uint32(7654), versions.SigningPubkeysVersion)
+			require.Nil(t, versions.Stage0Version)
 		})
 
 		// error response
@@ -107,7 +108,7 @@ func TestVersions(t *testing.T) {
 		env.communication.query = func(msg []byte) ([]byte, error) {
 			return nil, expectedErr
 		}
-		_, _, err := env.device.Versions()
+		_, err := env.device.Versions()
 		require.Equal(t, expectedErr, err)
 
 		for _, testResponse := range []string{
@@ -120,7 +121,7 @@ func TestVersions(t *testing.T) {
 			env.communication.query = func([]byte) ([]byte, error) {
 				return []byte(testResponse), nil
 			}
-			_, _, err := env.device.Versions()
+			_, err := env.device.Versions()
 			require.Error(t, err)
 		}
 	})
